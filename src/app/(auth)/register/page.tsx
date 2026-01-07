@@ -1,32 +1,54 @@
 "use client";
 
-import { useState } from "react"; // Import State
 import Link from "next/link";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "../../../lib/supabase/client";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
-import { useUserStore } from "../../../lib/store/userStore"; // Import Store
+import { useUserStore } from "../../../lib/store/userStore";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const setUserData = useUserStore((state) => state.setUserData); // Get action
+  const supabase = createClient();
+  const setUserData = useUserStore((state) => state.setUserData);
 
-  // 1. Capture Inputs
-  const [input, setInput] = useState({ name: "", email: "", password: "" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setError(null);
 
-    // 2. Simple Validation
-    if (!input.name || !input.email || !input.password) {
-      alert("Please fill in all fields");
+    // 1. Create User in Supabase Auth
+    const { data, error } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        // This metadata is caught by our SQL trigger to create the Profile
+        data: {
+          full_name: formData.name,
+        },
+      },
+    });
+
+    if (error) {
+      setError(error.message);
+      setLoading(false);
       return;
     }
 
-    // 3. Save Name/Email to Store (So we can use it later)
-    setUserData({ name: input.name, email: input.email });
+    // 2. Save Name/Email to Local Store (for the Onboarding wizard)
+    setUserData({ name: formData.name, email: formData.email });
 
-    // 4. Move to Onboarding
+    // 3. Success! Move to Onboarding
+    // Note: If you enabled "Confirm Email" in Supabase, you might need to show a "Check your email" message instead.
     router.push("/onboarding");
   };
 
@@ -38,6 +60,12 @@ export default function RegisterPage() {
           <p className="text-muted">Start your AI fitness journey today.</p>
         </div>
 
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded-lg mb-4 text-sm text-center">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSignup} className="space-y-4">
           <div>
             <label className="text-xs font-bold text-muted uppercase">
@@ -45,38 +73,49 @@ export default function RegisterPage() {
             </label>
             <input
               type="text"
-              value={input.name}
-              onChange={(e) => setInput({ ...input, name: e.target.value })} // Bind input
+              required
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
               className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-primary transition-colors"
             />
           </div>
-
           <div>
             <label className="text-xs font-bold text-muted uppercase">
               Email
             </label>
             <input
               type="email"
-              value={input.email}
-              onChange={(e) => setInput({ ...input, email: e.target.value })} // Bind input
+              required
+              value={formData.email}
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
               className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-primary transition-colors"
             />
           </div>
-
           <div>
             <label className="text-xs font-bold text-muted uppercase">
               Password
             </label>
             <input
               type="password"
-              value={input.password}
-              onChange={(e) => setInput({ ...input, password: e.target.value })} // Bind input
+              required
+              minLength={6}
+              value={formData.password}
+              onChange={(e) =>
+                setFormData({ ...formData, password: e.target.value })
+              }
               className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-primary transition-colors"
             />
           </div>
 
-          <Button className="w-full bg-primary text-black font-bold">
-            START FREE
+          <Button
+            disabled={loading}
+            className="w-full bg-primary text-black font-bold h-12"
+          >
+            {loading ? "CREATING..." : "START FREE"}
           </Button>
         </form>
 
