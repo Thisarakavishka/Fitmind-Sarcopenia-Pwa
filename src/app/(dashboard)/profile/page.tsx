@@ -1,71 +1,108 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { createClient } from "../../../lib/supabase/client";
+import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
-import { Icons } from "../../../components/ui/Icon";
+import { Icons } from "../../../components/ui/Icon"; // Ensure you import Icons
 
 export default function ProfilePage() {
-  const menuItems = [
-    { name: "Edit Profile", icon: Icons.Profile },
-    { name: "Fitness Goals", icon: Icons.Workout }, // Using workout icon as placeholder
-    { name: "Settings", icon: Icons.Profile },
-  ];
+  const supabase = createClient();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+
+  useEffect(() => {
+    async function getUser() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        setUserEmail(user.email || "");
+        const { data } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+        if (data?.role === "admin") setIsAdmin(true);
+      }
+    }
+    getUser();
+  }, []);
 
   return (
-    <div className="space-y-8">
-      {/* Header Profile */}
-      <div className="flex items-center gap-4">
-        <div className="w-20 h-20 rounded-full bg-surface border-2 border-primary flex items-center justify-center">
-          <Icons.Profile size={40} className="text-primary" />
+    <div className="space-y-8 pb-24">
+      {/* 1. Header */}
+      <div className="flex items-center gap-4 pt-4">
+        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-black font-bold text-2xl shadow-lg shadow-primary/20">
+          {userEmail.charAt(0).toUpperCase()}
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-white">Thisara</h1>
-          <p className="text-muted text-sm">
-            Intermediate • <span className="text-primary">Strength</span>
-          </p>
+          <h1 className="text-2xl font-bold text-white">My Profile</h1>
+          <p className="text-sm text-muted">{userEmail}</p>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="flex flex-col items-center justify-center p-3 py-4">
-          <span className="text-2xl font-bold text-white">48</span>
-          <span className="text-[10px] text-muted uppercase tracking-wider mt-1">
-            Workouts
-          </span>
-        </Card>
-        <Card className="flex flex-col items-center justify-center p-3 py-4 bg-primary/10 border-primary/20">
-          <span className="text-2xl font-bold text-primary">12</span>
-          <span className="text-[10px] text-muted uppercase tracking-wider mt-1">
-            Streak
-          </span>
-        </Card>
-        <Card className="flex flex-col items-center justify-center p-3 py-4">
-          <span className="text-2xl font-bold text-white">70kg</span>
-          <span className="text-[10px] text-muted uppercase tracking-wider mt-1">
-            Weight
-          </span>
-        </Card>
-      </div>
+      {/* 2. ADMIN ZONE (Only Visible to Admins) */}
+      {isAdmin && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="h-px flex-1 bg-gradient-to-r from-primary/50 to-transparent"></div>
+            <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
+              Admin Access
+            </span>
+            <div className="h-px flex-1 bg-gradient-to-l from-primary/50 to-transparent"></div>
+          </div>
 
-      {/* Menu List */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-bold text-muted ml-1">General</h3>
-        <Card className="p-0 overflow-hidden">
-          {menuItems.map((item, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between p-4 border-b border-white/5 last:border-0 hover:bg-white/5 cursor-pointer"
-            >
-              <div className="flex items-center gap-3">
-                <item.icon size={18} className="text-muted" />
-                <span className="text-sm text-white">{item.name}</span>
-              </div>
-              <span className="text-muted">›</span>
-            </div>
-          ))}
-        </Card>
+          <div className="grid grid-cols-2 gap-3">
+            <Link href="/admin" className="contents">
+              <Card className="p-5 border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all active:scale-95 flex flex-col items-center gap-3 text-center group cursor-pointer">
+                <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:scale-110 transition-transform">
+                  {/* If you don't have Icons.List, use a fallback svg */}
+                  <Icons.Workout size={24} />
+                </div>
+                <span className="text-xs font-bold text-white uppercase tracking-wide">
+                  Manage Templates
+                </span>
+              </Card>
+            </Link>
 
-        <button className="w-full py-4 text-red-500 text-sm font-bold mt-6 border border-red-500/20 rounded-xl hover:bg-red-500/10 transition-colors">
+            <Link href="/admin/templates/new" className="contents">
+              <Card className="p-5 border-white/10 bg-surface hover:bg-white/5 transition-all active:scale-95 flex flex-col items-center gap-3 text-center group cursor-pointer">
+                <div className="p-3 rounded-full bg-white/5 text-white group-hover:scale-110 transition-transform">
+                  <span className="text-xl font-bold">+</span>
+                </div>
+                <span className="text-xs font-bold text-white uppercase tracking-wide">
+                  Create New
+                </span>
+              </Card>
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Standard Settings */}
+      <div className="space-y-3">
+        <p className="text-[10px] font-bold text-muted uppercase tracking-widest">
+          General
+        </p>
+        <Button
+          variant="secondary"
+          className="w-full justify-between h-12 bg-surface hover:bg-white/10 border border-white/5"
+        >
+          <span>⚙️ Settings</span>
+          <span className="text-muted">→</span>
+        </Button>
+        <Button
+          variant="ghost"
+          className="w-full justify-start h-12 text-red-500 hover:bg-red-500/10"
+          onClick={async () => {
+            await supabase.auth.signOut();
+            window.location.href = "/login";
+          }}
+        >
           Log Out
-        </button>
+        </Button>
       </div>
     </div>
   );

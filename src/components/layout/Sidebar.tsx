@@ -3,69 +3,136 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icons } from "../ui/Icon";
-
-const navItems = [
-  { name: "Home", href: "/home", icon: Icons.Home },
-  { name: "Schedule", href: "/schedule", icon: Icons.Schedule },
-  { name: "Workout", href: "/workout", icon: Icons.Workout },
-  { name: "Nutrition", href: "/nutrition", icon: Icons.Nutrition },
-  { name: "Profile", href: "/profile", icon: Icons.Profile },
-];
+import { useEffect, useState } from "react";
+import { createClient } from "../../lib/supabase/client";
+import { Button } from "../ui/Button";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const supabase = createClient();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    async function checkRole() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+
+        if (data?.role === "admin") setIsAdmin(true);
+      }
+    }
+    checkRole();
+  }, []);
 
   return (
-    <aside className="hidden md:flex flex-col w-72 h-screen bg-background border-r border-white/5 fixed left-0 top-0 z-50 p-6">
-      {/* Logo Area */}
-      <div className="flex items-center gap-3 mb-10 px-2">
-        <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-black font-bold text-xl">
-          FM
-        </div>
-        <span className="text-2xl font-bold tracking-tight text-white">
-          FitMind
-        </span>
+    <aside className="hidden md:flex w-72 flex-col border-r border-white/5 bg-[#0a0a0a] fixed h-full z-50">
+      {/* 1. BRANDING */}
+      <div className="p-8 pb-10">
+        <h1 className="text-3xl font-bold text-white tracking-tighter">
+          FITMIND<span className="text-primary">.AI</span>
+        </h1>
       </div>
 
-      {/* Navigation Links */}
-      <nav className="flex flex-col gap-2 space-y-1">
-        {navItems.map((item) => {
-          const isActive = pathname.startsWith(item.href);
-          const Icon = item.icon;
+      {/* 2. MAIN NAVIGATION */}
+      <div className="flex-1 px-4 space-y-8 overflow-y-auto">
+        {/* User Menu */}
+        <div className="space-y-1">
+          <p className="px-4 text-[10px] font-bold text-muted/50 uppercase tracking-widest mb-2">
+            Menu
+          </p>
+          <NavItem
+            href="/home"
+            active={pathname === "/home"}
+            icon={<Icons.Home size={18} />}
+            label="Dashboard"
+          />
+          <NavItem
+            href="/schedule"
+            active={pathname === "/schedule"}
+            icon={<Icons.Schedule size={18} />}
+            label="Schedule"
+          />
+          <NavItem
+            href="/history"
+            active={pathname === "/history"}
+            icon={<Icons.Home size={18} />}
+            label="History"
+          />
+          <NavItem
+            href="/profile"
+            active={pathname === "/profile"}
+            icon={<Icons.Profile size={18} />}
+            label="Profile"
+          />
+        </div>
 
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`flex items-center gap-4 px-4 py-4 rounded-xl transition-all duration-200 group ${
-                isActive
-                  ? "bg-primary text-black font-bold shadow-[0_0_15px_rgba(45,212,191,0.3)]"
-                  : "text-muted hover:text-white hover:bg-white/5"
-              }`}
-            >
-              <Icon
-                size={24}
-                className={isActive ? "stroke-[2.5px]" : "stroke-[2px]"}
-              />
-              <span className="text-base">{item.name}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Bottom User Section */}
-      <div className="mt-auto pt-6 border-t border-white/5">
-        <div className="flex items-center gap-3 px-2">
-          <div className="w-10 h-10 rounded-full bg-surface border border-white/10 overflow-hidden">
-            {/* Placeholder Avatar */}
-            <div className="w-full h-full bg-gradient-to-tr from-primary to-purple-500 opacity-50"></div>
+        {/* ADMIN MENU (Integrated Seamlessly) */}
+        {isAdmin && (
+          <div className="space-y-1 animate-in fade-in slide-in-from-left-4 duration-500">
+            <p className="px-4 text-[10px] font-bold text-primary/80 uppercase tracking-widest mb-2">
+              Management
+            </p>
+            <NavItem
+              href="/admin"
+              active={pathname === "/admin"}
+              icon={<Icons.Home size={18} />}
+              label="Workout Library"
+            />
+            {/* Future admin links go here, e.g., Users, Analytics */}
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-bold text-white">Thisara</span>
-            <span className="text-xs text-muted">Free Plan</span>
+        )}
+      </div>
+
+      {/* 3. FOOTER */}
+      <div className="p-4 m-4 rounded-xl bg-white/5 border border-white/5">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold">
+            AI
+          </div>
+          <div className="overflow-hidden">
+            <p className="text-xs font-bold text-white truncate">My Account</p>
           </div>
         </div>
+        <Button
+          onClick={async () => {
+            await supabase.auth.signOut();
+            window.location.href = "/login";
+          }}
+          variant="ghost"
+          className="w-full h-8 text-xs justify-start text-muted hover:text-red-400 hover:bg-red-500/10"
+        >
+          Log Out
+        </Button>
       </div>
     </aside>
+  );
+}
+
+// Clean Nav Item Component
+function NavItem({ href, active, icon, label }: any) {
+  return (
+    <Link
+      href={href}
+      className={`group flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 border border-transparent ${
+        active
+          ? "bg-primary/10 text-primary border-primary/20 shadow-[0_0_15px_rgba(45,212,191,0.1)]"
+          : "text-muted hover:text-white hover:bg-white/5"
+      }`}
+    >
+      <span
+        className={`transition-colors ${
+          active ? "text-primary" : "text-muted group-hover:text-white"
+        }`}
+      >
+        {icon}
+      </span>
+      <span className="text-sm font-medium tracking-wide">{label}</span>
+    </Link>
   );
 }
