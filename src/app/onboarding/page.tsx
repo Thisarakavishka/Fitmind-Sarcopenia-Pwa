@@ -1,38 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "../../lib/supabase/client";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { useUserStore } from "../../lib/store/userStore";
-// import { predictWorkoutPlan } from "../../features/schedule/utils/predictPlan"; // <--- You will uncomment this later
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const setUserData = useUserStore((state) => state.setUserData);
+  const supabase = createClient();
 
-  // Track which step the user is on (1, 2, or 3)
+  // 1. Get Action AND Data from Store (to show the user's name)
+  const { setUserData, name } = useUserStore();
+
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Local state to hold answers before saving
   const [formData, setFormData] = useState({
     age: "",
     weight: "",
     height: "",
-    goal: "muscle", // Default value
-    level: "beginner", // Default value
+    goal: "muscle",
+    level: "beginner",
   });
 
-  // Helper to update specific fields
   const updateField = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleNext = async () => {
-    // --- VALIDATION LOGIC ---
-
-    // Step 1: Check Body Stats
+    // --- STEP 1: VALIDATION ---
     if (step === 1) {
       if (!formData.age || !formData.weight || !formData.height) {
         alert("Please fill in all fields to continue.");
@@ -43,50 +41,63 @@ export default function OnboardingPage() {
         alert("Please enter a valid age (10-100).");
         return;
       }
-      // If valid, go to next step
       setStep(2);
       return;
     }
 
-    // Step 2: Goal (Always has a default, so just proceed)
+    // --- STEP 2: GOAL ---
     if (step === 2) {
       setStep(3);
       return;
     }
 
-    // Step 3: Final Submission
+    // --- STEP 3: SUBMISSION ---
     if (step === 3) {
       setIsLoading(true);
 
-      // 1. Format the data for storage
-      const finalData = {
-        age: parseInt(formData.age),
-        weight: parseInt(formData.weight),
-        height: parseInt(formData.height),
-        goal: formData.goal as
-          | "muscle"
-          | "weight_loss"
-          | "sarcopenia_prevention",
-        level: formData.level as "beginner" | "intermediate" | "advanced",
-      };
-
-      // 2. Save to Global Store (Zustand)
-      setUserData(finalData);
-
-      // 3. (FUTURE) Call AI Model Here
       try {
-        console.log("🤖 AI Generative Model Running...");
-        // const schedule = await predictWorkoutPlan(finalData);
-        // setUserData({ recommendedPlan: schedule }); // Save AI result to store
+        // A. Format Data
+        const finalData = {
+          age: parseInt(formData.age),
+          weight: parseInt(formData.weight),
+          height: parseInt(formData.height),
+          goal: formData.goal as
+            | "muscle"
+            | "weight_loss"
+            | "sarcopenia_prevention",
+          level: formData.level as "beginner" | "intermediate" | "advanced",
+        };
 
-        // Simulate a small delay for "AI Thinking" effect
+        // B. Save to Zustand (Client Memory)
+        setUserData(finalData);
+
+        // C. Update Supabase (Database Memory)
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          // This flag tells the DashboardLayout: "Let this user in!"
+          const { error } = await supabase
+            .from("profiles")
+            .update({ is_onboarded: true })
+            .eq("id", user.id);
+
+          if (error) {
+            console.error("Supabase Update Failed:", error);
+            throw new Error("Could not save profile.");
+          }
+        }
+
+        // D. Simulate AI Loading (for effect)
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        // 4. Redirect to Dashboard
+        // E. Final Redirect
+        router.refresh(); // Ensure the layout re-checks the new status
         router.push("/home");
       } catch (error) {
-        console.error("Error generating plan:", error);
-        alert("Something went wrong. Please try again.");
+        console.error("Onboarding Error:", error);
+        alert("Failed to save progress. Please try again.");
       } finally {
         setIsLoading(false);
       }
@@ -95,36 +106,29 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
-      {/* 1. Progress Bar */}
+      {/* Progress Bar */}
       <div className="w-full max-w-md mb-8 flex gap-2">
-        <div
-          className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-            step >= 1 ? "bg-primary" : "bg-white/10"
-          }`}
-        />
-        <div
-          className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-            step >= 2 ? "bg-primary" : "bg-white/10"
-          }`}
-        />
-        <div
-          className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-            step >= 3 ? "bg-primary" : "bg-white/10"
-          }`}
-        />
+        {[1, 2, 3].map((s) => (
+          <div
+            key={s}
+            className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
+              step >= s ? "bg-primary" : "bg-white/10"
+            }`}
+          />
+        ))}
       </div>
 
-      {/* 2. Main Card */}
       <Card className="w-full max-w-md p-6 border-white/10 bg-surface">
-        {/* STEP 1: Body Stats */}
+        {/* --- STEP 1: BODY STATS --- */}
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="text-center">
+              {/* Personalized Greeting */}
               <h2 className="text-2xl font-bold text-white">
-                Let's get your stats
+                One last step, {name || "Athlete"}!
               </h2>
               <p className="text-muted text-sm mt-1">
-                We use this to calculate your metabolic rate.
+                We need your bio-metrics to build your custom AI Plan.
               </p>
             </div>
 
@@ -169,7 +173,7 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* STEP 2: Goal Selection */}
+        {/* --- STEP 2: GOALS --- */}
         {step === 2 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="text-center">
@@ -177,7 +181,7 @@ export default function OnboardingPage() {
                 What's your main goal?
               </h2>
               <p className="text-muted text-sm mt-1">
-                We will tailor the intensity for you.
+                Tailors the workout intensity.
               </p>
             </div>
 
@@ -232,7 +236,7 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* STEP 3: Experience Level */}
+        {/* --- STEP 3: EXPERIENCE --- */}
         {step === 3 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="text-center">
@@ -277,7 +281,7 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Navigation Button */}
+        {/* --- ACTION BUTTON --- */}
         <Button
           onClick={handleNext}
           disabled={isLoading}
@@ -285,7 +289,7 @@ export default function OnboardingPage() {
         >
           {isLoading ? (
             <span className="flex items-center gap-2">
-              Generating... <span className="animate-spin">⏳</span>
+              Generating Plan... <span className="animate-spin">⏳</span>
             </span>
           ) : step === 3 ? (
             "GENERATE PLAN ✨"
