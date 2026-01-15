@@ -4,7 +4,8 @@ import { useState } from "react";
 import { createClient } from "../../../../lib/supabase/client";
 import { Button } from "../../../../components/ui/Button";
 import { Card } from "../../../../components/ui/Card";
-import { Icons } from "../../../../components/ui/Icon"; 
+import { Icons } from "../../../../components/ui/Icon";
+
 // --- TYPES ---
 type WorkoutSet = {
   reps: string;
@@ -18,10 +19,18 @@ type Exercise = {
   isSuperSet: boolean;
 };
 
+// Match these with your AI Scheduler!
+const AI_TAGS = [
+  { id: "Silver_Mobility", label: "Silver (Seniors)" },
+  { id: "Low_Impact_Burn", label: "Low Impact (Obese)" },
+  { id: "Hypertrophy_Builder", label: "Hypertrophy (Standard)" },
+  { id: "Athlete_Performance", label: "Athlete (Pro)" },
+];
+
 interface CreateTemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void; // Trigger refresh after saving
+  onSuccess: () => void;
 }
 
 export function CreateTemplateModal({
@@ -36,6 +45,7 @@ export function CreateTemplateModal({
   const [name, setName] = useState("");
   const [focus, setFocus] = useState("");
   const [intensity, setIntensity] = useState("Medium");
+  const [aiTag, setAiTag] = useState("Hypertrophy_Builder"); // Default
   const [exercises, setExercises] = useState<Exercise[]>([]);
 
   // --- EXERCISE BUILDER STATE ---
@@ -86,6 +96,7 @@ export function CreateTemplateModal({
       name,
       focus,
       intensity,
+      ai_tag: aiTag, // <--- SAVING THE AI TAG
       exercises,
       is_premium: false,
     });
@@ -93,11 +104,12 @@ export function CreateTemplateModal({
     if (error) {
       alert("Error: " + error.message);
     } else {
-      onSuccess(); // Tell parent to refresh
-      onClose(); // Close modal
+      onSuccess();
+      onClose();
       // Reset Form
       setName("");
       setFocus("");
+      setAiTag("Hypertrophy_Builder");
       setExercises([]);
     }
     setLoading(false);
@@ -106,21 +118,14 @@ export function CreateTemplateModal({
   if (!isOpen) return null;
 
   return (
-    // OVERLAY
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      {/* CARD CONTAINER */}
       <div className="w-full max-w-2xl bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* HEADER */}
         <div className="p-4 border-b border-white/10 flex justify-between items-center bg-surface">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <span className="text-primary text-xl">+</span> New Template
           </h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="rounded-full hover:bg-white/10"
-          >
+          <Button variant="ghost" size="icon" onClick={onClose}>
             ✕
           </Button>
         </div>
@@ -140,7 +145,8 @@ export function CreateTemplateModal({
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div>
                 <label className="text-[10px] font-bold text-muted uppercase">
                   Focus
@@ -166,12 +172,30 @@ export function CreateTemplateModal({
                   <option value="High">High</option>
                 </select>
               </div>
+
+              {/* AI TAG SELECTOR (NEW) */}
+              <div>
+                <label className="text-[10px] font-bold text-primary uppercase">
+                  AI Category
+                </label>
+                <select
+                  className="w-full bg-primary/10 border border-primary/30 rounded-lg p-3 text-sm text-primary font-bold focus:border-primary outline-none"
+                  value={aiTag}
+                  onChange={(e) => setAiTag(e.target.value)}
+                >
+                  {AI_TAGS.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
           <hr className="border-white/10" />
 
-          {/* 2. Exercise Preview (Pills) */}
+          {/* 2. Exercise Preview */}
           {exercises.length > 0 && (
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-muted uppercase">
@@ -224,8 +248,9 @@ export function CreateTemplateModal({
             </div>
           )}
 
-          {/* 3. Add Exercise Form */}
+          {/* 3. Add Exercise Form (unchanged logic, just layout) */}
           <div className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-4">
+            {/* ... (Same as before, just kept concise for this snippet) ... */}
             <div className="flex justify-between">
               <h3 className="text-xs font-bold text-white uppercase tracking-wider">
                 Add Exercise
@@ -241,15 +266,12 @@ export function CreateTemplateModal({
                 SuperSet {exIsSuperSet ? "ON" : "OFF"}
               </button>
             </div>
-
             <input
               className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-primary outline-none"
               placeholder="Exercise Name..."
               value={exName}
               onChange={(e) => setExName(e.target.value)}
             />
-
-            {/* Sets Row */}
             <div className="flex gap-2">
               <input
                 type="number"
@@ -273,8 +295,6 @@ export function CreateTemplateModal({
                 +
               </Button>
             </div>
-
-            {/* Draft Sets List */}
             {currentSets.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {currentSets.map((s, i) => (
@@ -293,7 +313,6 @@ export function CreateTemplateModal({
                 </span>
               </div>
             )}
-
             <Button
               onClick={saveExercise}
               className="w-full bg-white text-black font-bold hover:bg-gray-200"
@@ -303,7 +322,7 @@ export function CreateTemplateModal({
           </div>
         </div>
 
-        {/* FOOTER ACTIONS */}
+        {/* FOOTER */}
         <div className="p-4 border-t border-white/10 bg-surface flex justify-end gap-3">
           <Button variant="ghost" onClick={onClose}>
             Cancel
