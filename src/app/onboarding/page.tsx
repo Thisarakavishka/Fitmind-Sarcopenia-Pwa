@@ -1,31 +1,47 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../../lib/supabase/client";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { useUserStore } from "../../lib/store/userStore";
+import { predictWorkoutPlan } from "../../lib/ai/scheduler";
+
+// --- 1. DEFINE TYPES TO FIX TS ERRORS ---
+type Gender = "male" | "female";
+type Goal = "muscle" | "weight_loss" | "sarcopenia_prevention";
+type Level = "beginner" | "intermediate" | "advanced";
+
+interface OnboardingData {
+  age: string;
+  weight: string;
+  height: string;
+  gender: Gender;
+  goal: Goal;
+  level: Level;
+}
 
 export default function OnboardingPage() {
   const router = useRouter();
   const supabase = createClient();
-
-  // 1. Get Action AND Data from Store (to show the user's name)
-  const { setUserData, name } = useUserStore();
+  const { setUserData } = useUserStore(); // Removed 'name' if unused, add back if needed
 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
 
-  const [formData, setFormData] = useState({
+  // --- 2. TYPED STATE ---
+  const [formData, setFormData] = useState<OnboardingData>({
     age: "",
     weight: "",
     height: "",
+    gender: "male",
     goal: "muscle",
     level: "beginner",
   });
 
-  const updateField = (field: string, value: string) => {
+  // Helper to update state safely
+  const updateField = (field: keyof OnboardingData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -33,12 +49,7 @@ export default function OnboardingPage() {
     // --- STEP 1: VALIDATION ---
     if (step === 1) {
       if (!formData.age || !formData.weight || !formData.height) {
-        alert("Please fill in all fields to continue.");
-        return;
-      }
-      const ageNum = parseInt(formData.age);
-      if (ageNum < 10 || ageNum > 100) {
-        alert("Please enter a valid age (10-100).");
+        alert("Please fill in all fields.");
         return;
       }
       setStep(2);
@@ -51,53 +62,63 @@ export default function OnboardingPage() {
       return;
     }
 
-    // --- STEP 3: SUBMISSION ---
+    // --- STEP 3: SUBMISSION & AI ---
     if (step === 3) {
       setIsLoading(true);
 
       try {
-        // A. Format Data
-        const finalData = {
-          age: parseInt(formData.age),
-          weight: parseInt(formData.weight),
-          height: parseInt(formData.height),
-          goal: formData.goal as
-            | "muscle"
-            | "weight_loss"
-            | "sarcopenia_prevention",
-          level: formData.level as "beginner" | "intermediate" | "advanced",
-        };
+        const ageNum = parseInt(formData.age);
+        const weightNum = parseInt(formData.weight);
+        const heightNum = parseInt(formData.height);
 
-        // B. Save to Zustand (Client Memory)
-        setUserData(finalData);
+        // 1. AI Prediction 🧠
+        const aiTag = await predictWorkoutPlan({
+          age: ageNum,
+          weight: weightNum,
+          height: heightNum,
+          gender: formData.gender,
+          experience: formData.level,
+        });
 
-        // C. Update Supabase (Database Memory)
+        console.log("🤖 AI Decided:", aiTag);
+
+        // 2. Save to Zustand (TS Error Fixed via Typing)
+        setUserData({
+          age: ageNum,
+          weight: weightNum,
+          height: heightNum,
+          goal: formData.goal,
+          level: formData.level,
+        });
+
+        // 3. Update Supabase
         const {
           data: { user },
         } = await supabase.auth.getUser();
 
         if (user) {
-          // This flag tells the DashboardLayout: "Let this user in!"
           const { error } = await supabase
             .from("profiles")
-            .update({ is_onboarded: true })
+            .update({
+              is_onboarded: true,
+              age: ageNum,
+              weight: weightNum,
+              height: heightNum,
+              gender: formData.gender,
+              goal: formData.goal,
+              experience_level: formData.level,
+              ai_plan_tag: aiTag,
+            })
             .eq("id", user.id);
 
-          if (error) {
-            console.error("Supabase Update Failed:", error);
-            throw new Error("Could not save profile.");
-          }
+          if (error) throw error;
         }
 
-        // D. Simulate AI Loading (for effect)
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        // E. Final Redirect
-        router.refresh(); // Ensure the layout re-checks the new status
+        router.refresh();
         router.push("/home");
       } catch (error) {
         console.error("Onboarding Error:", error);
-        alert("Failed to save progress. Please try again.");
+        alert("Failed to generate plan.");
       } finally {
         setIsLoading(false);
       }
@@ -105,9 +126,9 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
-      {/* Progress Bar */}
-      <div className="w-full max-w-md mb-8 flex gap-2">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+      {/* Small Progress Bar */}
+      <div className="w-full max-w-sm mb-6 flex gap-1.5">
         {[1, 2, 3].map((s) => (
           <div
             key={s}
@@ -118,56 +139,71 @@ export default function OnboardingPage() {
         ))}
       </div>
 
-      <Card className="w-full max-w-md p-6 border-white/10 bg-surface">
-        {/* --- STEP 1: BODY STATS --- */}
+      {/* COMPACT CARD (max-w-sm) */}
+      <Card className="w-full max-w-sm p-5 border-white/10 bg-surface shadow-2xl">
+        {/* --- STEP 1: BIO-METRICS --- */}
         {step === 1 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="text-center">
-              {/* Personalized Greeting */}
-              <h2 className="text-2xl font-bold text-white">
-                One last step, {name || "Athlete"}!
-              </h2>
-              <p className="text-muted text-sm mt-1">
-                We need your bio-metrics to build your custom AI Plan.
+          <div className="space-y-4 animate-in fade-in slide-in-from-right-2">
+            <div className="text-center mb-2">
+              <h2 className="text-xl font-bold text-white">Bio-Metrics</h2>
+              <p className="text-muted text-xs mt-0.5">
+                Required for AI Safety.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted uppercase">
+            {/* Compact Gender Switch */}
+            <div className="bg-black/20 p-1 rounded-lg flex gap-1 mb-2">
+              {["male", "female"].map((g) => (
+                <button
+                  key={g}
+                  onClick={() => updateField("gender", g)}
+                  className={`flex-1 py-2 rounded-md text-sm font-bold capitalize transition-all ${
+                    formData.gender === g
+                      ? "bg-primary text-black shadow-lg"
+                      : "text-muted hover:text-white"
+                  }`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-muted uppercase tracking-wider">
                   Age
                 </label>
                 <input
                   type="number"
-                  placeholder="25"
                   value={formData.age}
                   onChange={(e) => updateField("age", e.target.value)}
-                  className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white text-lg font-bold text-center focus:border-primary focus:outline-none transition-colors"
+                  className="w-full bg-black/20 border border-white/10 rounded-lg p-2.5 text-white text-base font-bold text-center focus:border-primary focus:outline-none"
+                  placeholder="25"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted uppercase">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-muted uppercase tracking-wider">
                   Weight (kg)
                 </label>
                 <input
                   type="number"
-                  placeholder="70"
                   value={formData.weight}
                   onChange={(e) => updateField("weight", e.target.value)}
-                  className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white text-lg font-bold text-center focus:border-primary focus:outline-none transition-colors"
+                  className="w-full bg-black/20 border border-white/10 rounded-lg p-2.5 text-white text-base font-bold text-center focus:border-primary focus:outline-none"
+                  placeholder="70"
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-muted uppercase">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-muted uppercase tracking-wider">
                 Height (cm)
               </label>
               <input
                 type="number"
-                placeholder="175"
                 value={formData.height}
                 onChange={(e) => updateField("height", e.target.value)}
-                className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white text-lg font-bold text-center focus:border-primary focus:outline-none transition-colors"
+                className="w-full bg-black/20 border border-white/10 rounded-lg p-2.5 text-white text-base font-bold text-center focus:border-primary focus:outline-none"
+                placeholder="175"
               />
             </div>
           </div>
@@ -175,52 +211,46 @@ export default function OnboardingPage() {
 
         {/* --- STEP 2: GOALS --- */}
         {step === 2 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-white">
-                What's your main goal?
-              </h2>
-              <p className="text-muted text-sm mt-1">
-                Tailors the workout intensity.
-              </p>
+          <div className="space-y-4 animate-in fade-in slide-in-from-right-2">
+            <div className="text-center mb-2">
+              <h2 className="text-xl font-bold text-white">Main Goal?</h2>
+              <p className="text-muted text-xs">Tailors the intensity.</p>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               {[
                 {
                   id: "muscle",
                   label: "Build Muscle",
                   icon: "💪",
-                  desc: "Hypertrophy & Strength",
+                  desc: "Hypertrophy",
                 },
                 {
                   id: "weight_loss",
                   label: "Lose Weight",
                   icon: "🔥",
-                  desc: "High Intensity Cardio",
+                  desc: "High Burn",
                 },
                 {
                   id: "sarcopenia_prevention",
-                  label: "Healthy Aging (40+)",
+                  label: "Healthy Aging",
                   icon: "🩺",
-                  desc: "Mobility & Balance",
+                  desc: "Mobility",
                 },
               ].map((goal) => (
                 <div
                   key={goal.id}
                   onClick={() => updateField("goal", goal.id)}
-                  className={`p-4 rounded-xl border cursor-pointer flex items-center gap-4 transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                  className={`p-3 rounded-xl border cursor-pointer flex items-center gap-3 transition-all ${
                     formData.goal === goal.id
-                      ? "bg-primary/10 border-primary shadow-[0_0_15px_rgba(45,212,191,0.2)]"
+                      ? "bg-primary/10 border-primary"
                       : "bg-black/20 border-white/10 hover:bg-white/5"
                   }`}
                 >
-                  <div className="w-12 h-12 rounded-full bg-background flex items-center justify-center text-2xl">
-                    {goal.icon}
-                  </div>
-                  <div>
+                  <div className="text-xl">{goal.icon}</div>
+                  <div className="flex-1">
                     <h3
-                      className={`font-bold ${
+                      className={`text-sm font-bold ${
                         formData.goal === goal.id
                           ? "text-primary"
                           : "text-white"
@@ -228,8 +258,11 @@ export default function OnboardingPage() {
                     >
                       {goal.label}
                     </h3>
-                    <p className="text-xs text-muted">{goal.desc}</p>
+                    <p className="text-[10px] text-muted">{goal.desc}</p>
                   </div>
+                  {formData.goal === goal.id && (
+                    <div className="w-2 h-2 rounded-full bg-primary" />
+                  )}
                 </div>
               ))}
             </div>
@@ -238,43 +271,35 @@ export default function OnboardingPage() {
 
         {/* --- STEP 3: EXPERIENCE --- */}
         {step === 3 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-white">
-                Experience Level
-              </h2>
-              <p className="text-muted text-sm mt-1">
-                Be honest, we won't judge!
-              </p>
+          <div className="space-y-4 animate-in fade-in slide-in-from-right-2">
+            <div className="text-center mb-2">
+              <h2 className="text-xl font-bold text-white">Experience</h2>
+              <p className="text-muted text-xs">Sets starting difficulty.</p>
             </div>
 
-            <div className="grid grid-cols-1 gap-3">
+            <div className="space-y-2">
               {[
-                { id: "beginner", label: "Beginner", desc: "New to fitness" },
+                { id: "beginner", label: "Beginner", desc: "Just starting" },
                 {
                   id: "intermediate",
                   label: "Intermediate",
-                  desc: "Train 1-2 times a week",
+                  desc: "6mo - 2yrs",
                 },
-                {
-                  id: "advanced",
-                  label: "Advanced",
-                  desc: "Training for years",
-                },
+                { id: "advanced", label: "Advanced", desc: "2yrs+" },
               ].map((lvl) => (
                 <div
                   key={lvl.id}
                   onClick={() => updateField("level", lvl.id)}
-                  className={`p-4 rounded-xl border cursor-pointer flex justify-between items-center transition-all ${
+                  className={`p-3 rounded-xl border cursor-pointer flex justify-between items-center transition-all ${
                     formData.level === lvl.id
                       ? "bg-primary/10 border-primary"
                       : "bg-black/20 border-white/10 hover:bg-white/5"
                   }`}
                 >
-                  <span className="capitalize font-bold text-white">
+                  <span className="text-sm font-bold text-white capitalize">
                     {lvl.label}
                   </span>
-                  <span className="text-xs text-muted">{lvl.desc}</span>
+                  <span className="text-[10px] text-muted">{lvl.desc}</span>
                 </div>
               ))}
             </div>
@@ -285,11 +310,11 @@ export default function OnboardingPage() {
         <Button
           onClick={handleNext}
           disabled={isLoading}
-          className="w-full mt-8 bg-primary text-black font-bold h-12 text-lg shadow-[0_0_20px_rgba(45,212,191,0.3)] hover:shadow-[0_0_30px_rgba(45,212,191,0.5)] transition-all"
+          className="w-full mt-6 bg-primary text-black font-bold h-10 text-sm shadow-lg hover:shadow-primary/20 transition-all"
         >
           {isLoading ? (
             <span className="flex items-center gap-2">
-              Generating Plan... <span className="animate-spin">⏳</span>
+              Thinking... <span className="animate-spin text-xs">⏳</span>
             </span>
           ) : step === 3 ? (
             "GENERATE PLAN ✨"
