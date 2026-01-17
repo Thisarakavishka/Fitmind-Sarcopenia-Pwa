@@ -25,6 +25,7 @@ export function Sidebar() {
           .single();
 
         if (data?.role === "admin") setIsAdmin(true);
+        console.log(data);
       }
     }
     checkRole();
@@ -43,7 +44,7 @@ export function Sidebar() {
       <div className="flex-1 px-4 space-y-8 overflow-y-auto">
         {/* User Menu */}
         <div className="space-y-1">
-          <p className="px-4 text-[10px] font-bold text-muted/50 uppercase tracking-widest mb-2">
+          <p className="px-4 text-[10px] font-bold text-primary/80 uppercase tracking-widest mb-2">
             Menu
           </p>
           <NavItem
@@ -59,9 +60,21 @@ export function Sidebar() {
             label="Schedule"
           />
           <NavItem
+            href="/workout"
+            active={pathname === "/workout"}
+            icon={<Icons.Workout size={18} />}
+            label="Workout"
+          />
+          <NavItem
+            href="/nutrition"
+            active={pathname === "/nutrition"}
+            icon={<Icons.Nutrition size={18} />} // Make sure Icons.Nutrition exists or use Icons.List
+            label="Nutrition"
+          />
+          <NavItem
             href="/history"
             active={pathname === "/history"}
-            icon={<Icons.Home size={18} />}
+            icon={<Icons.History size={18} />}
             label="History"
           />
           <NavItem
@@ -79,12 +92,23 @@ export function Sidebar() {
               Management
             </p>
             <NavItem
-              href="/admin"
-              active={pathname === "/admin"}
-              icon={<Icons.Home size={18} />}
-              label="Workout Library"
+              href="/admin/users"
+              active={pathname === "/admin/users"}
+              icon={<Icons.Profile size={18} />}
+              label="Users"
             />
-            {/* Future admin links go here, e.g., Users, Analytics */}
+            <NavItem
+              href="/template"
+              active={pathname === "/template"}
+              icon={<Icons.Library size={18} />}
+              label="Template Library"
+            />
+            <NavItem
+              href="/exercises"
+              active={pathname === "/exercises"}
+              icon={<Icons.List size={18} />}
+              label="Exercises"
+            />
           </div>
         )}
       </div>
