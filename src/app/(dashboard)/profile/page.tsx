@@ -55,25 +55,26 @@ export default function ProfilePage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Link href="/admin" className="contents">
+            <Link href="/template" className="contents">
               <Card className="p-5 border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all active:scale-95 flex flex-col items-center gap-3 text-center group cursor-pointer">
                 <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:scale-110 transition-transform">
                   {/* If you don't have Icons.List, use a fallback svg */}
                   <Icons.Workout size={24} />
                 </div>
                 <span className="text-xs font-bold text-white uppercase tracking-wide">
-                  Manage Templates
+                  Templates
                 </span>
               </Card>
             </Link>
 
-            <Link href="/admin/templates/new" className="contents">
-              <Card className="p-5 border-white/10 bg-surface hover:bg-white/5 transition-all active:scale-95 flex flex-col items-center gap-3 text-center group cursor-pointer">
-                <div className="p-3 rounded-full bg-white/5 text-white group-hover:scale-110 transition-transform">
-                  <span className="text-xl font-bold">+</span>
+            <Link href="/exercises" className="contents">
+              <Card className="p-5 border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all active:scale-95 flex flex-col items-center gap-3 text-center group cursor-pointer">
+                <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:scale-110 transition-transform">
+                  {/* If you don't have Icons.List, use a fallback svg */}
+                  <Icons.Workout size={24} />
                 </div>
                 <span className="text-xs font-bold text-white uppercase tracking-wide">
-                  Create New
+                  Exercises
                 </span>
               </Card>
             </Link>

@@ -92,8 +92,8 @@ export function Sidebar() {
               Management
             </p>
             <NavItem
-              href="/admin/users"
-              active={pathname === "/admin/users"}
+              href="/users"
+              active={pathname === "/users"}
               icon={<Icons.Profile size={18} />}
               label="Users"
             />

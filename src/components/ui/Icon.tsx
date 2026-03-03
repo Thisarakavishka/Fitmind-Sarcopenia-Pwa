@@ -7,9 +7,11 @@ import {
   User,
   List,
   Utensils,
+  Trash,
 } from "lucide-react";
 
 export const Icons = {
+  Trash,
   History,
   Library,
   List,

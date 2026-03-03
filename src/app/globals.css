@@ -12,6 +12,18 @@
   --muted: #a1a1aa;         /* Grey text for secondary info */
 }
 
+@layer utilities {
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+}
+
 /* 2. Map Variables to Tailwind v4 Theme */
 @theme inline {
   --color-background: var(--background);
