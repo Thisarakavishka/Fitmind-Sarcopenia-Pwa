@@ -7,6 +7,7 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { useUserStore } from "../../lib/store/userStore";
 import { predictWorkoutPlan } from "../../lib/ai/scheduler";
+import { generateScheduleInDB } from "../../lib/ai/templateBuilder";
 
 type Gender = "male" | "female";
 type Goal = "muscle" | "weight_loss" | "sarcopenia_prevention";
@@ -95,19 +96,24 @@ export default function OnboardingPage() {
 
         if (user) {
           const { error } = await supabase.from("profiles").upsert({
-            id: user.id, // Must include the user ID for upsert
+            id: user.id,
             email: user.email,
             is_onboarded: true,
             age: ageNum,
-            weight_kg: weightNum, // Matches new DB
-            height_cm: heightNum, // Matches new DB
+            weight_kg: weightNum,
+            height_cm: heightNum,
             gender: formData.gender,
-            target_goal: formData.goal, // Matches new DB
+            target_goal: formData.goal,
             experience_level: formData.level,
-            pain_level: formData.pain_level, // Crucial for 40+ AI Safety
+            pain_level: formData.pain_level,
+            ai_plan_tag: aiTag, // 🌟 Save the AI Tag to the profile!
           });
 
           if (error) throw error;
+
+          // 🌟 NEW: Build the physical schedule in the database!
+          console.log(`Building ${aiTag} schedule in database...`);
+          await generateScheduleInDB(user.id, aiTag);
         }
 
         router.refresh();
