@@ -32,18 +32,16 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session if expired
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // PROTECTED ROUTES LOGIC
-  // 1. If user is NOT logged in, but tries to go to /home, kick them to /login
+  // 1. PROTECT DASHBOARD
   if (!user && request.nextUrl.pathname.startsWith("/home")) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // 2. If user IS logged in, but tries to go to /login, send them to /home
+  // 2. PROTECT AUTH PAGES (Don't let logged-in users see login)
   if (
     user &&
     (request.nextUrl.pathname.startsWith("/login") ||
@@ -52,10 +50,29 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/home", request.url));
   }
 
+  // 3. PROTECT ADMIN ROUTES (New!)
+  if (request.nextUrl.pathname.startsWith("/admin")) {
+    // A. Must be logged in
+    if (!user) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+
+    // B. Check Role
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    // If role is NOT 'admin', kick them to Home
+    if (profile?.role !== "admin") {
+      return NextResponse.redirect(new URL("/home", request.url));
+    }
+  }
+
   return response;
 }
 
 export const config = {
-  // Apply middleware to everything EXCEPT static files (images, fonts)
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
