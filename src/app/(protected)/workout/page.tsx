@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "../../../lib/supabase/client";
-import { Button } from "../../../components/ui/Button";
+import { Button } from "../../../components/shared/Button";
 
 function WorkoutContent() {
   const supabase = createClient();
@@ -14,165 +14,138 @@ function WorkoutContent() {
   const [session, setSession] = useState<any>(null);
   const [exercises, setExercises] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Track which exercises are expanded (for reading details) and checked (completed)
+  const [isFinishing, setIsFinishing] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [completedExercises, setCompletedExercises] = useState<Set<string>>(new Set());
+  
+  // 🌟 NEW: Track specific sets completed
+  // Key: exercise_id, Value: Array of completed set indices [0, 1, 2]
+  const [setHistory, setSetHistory] = useState<Record<string, number[]>>({});
 
   useEffect(() => {
     async function fetchSession() {
       if (!sessionId) return;
-      
       try {
-        // Fetch the Session
-        const { data: sessionData } = await supabase
-          .from("workout_sessions")
-          .select("*")
-          .eq("id", sessionId)
-          .single();
-        
+        const { data: sessionData } = await supabase.from("workout_sessions").select("*").eq("id", sessionId).single();
         if (sessionData) setSession(sessionData);
 
-        // Fetch the nested exercises with their library details
-        const { data: exData } = await supabase
-          .from("session_exercises")
-          .select(`
+        const { data: exData } = await supabase.from("session_exercises").select(`
             id, target_sets, target_reps, order_index,
             exercise_library (id, name, description, muscle_group, equipment, has_ai_model)
-          `)
-          .eq("session_id", sessionId)
-          .order("order_index", { ascending: true });
+          `).eq("session_id", sessionId).order("order_index", { ascending: true });
 
-        if (exData) setExercises(exData);
-      } catch (error) {
-        console.error("Error fetching workout:", error);
-      } finally {
-        setIsLoading(false);
-      }
+        if (exData) {
+          setExercises(exData);
+          // Sync with DB: Find how many logs exist for each exercise today
+          const { data: logs } = await supabase.from("workout_history_logs").select("session_exercise_id");
+          const history: Record<string, number[]> = {};
+          exData.forEach(ex => {
+            const count = logs?.filter(l => l.session_exercise_id === ex.id).length || 0;
+            history[ex.id] = Array.from({ length: count }, (_, i) => i);
+          });
+          setSetHistory(history);
+        }
+      } catch (error) { console.error(error); } finally { setIsLoading(false); }
     }
     fetchSession();
   }, [sessionId, supabase]);
 
-  const toggleCheck = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevents expanding the card when clicking the checkbox
-    const newSet = new Set(completedExercises);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setCompletedExercises(newSet);
+  const handleFinishWorkout = async () => {
+    setIsFinishing(true);
+    await supabase.from("workout_sessions").update({ is_completed: true }).eq("id", sessionId);
+    router.push("/home");
   };
 
-  if (isLoading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"/></div>;
-  if (!session) return <div className="p-8 text-white text-center">Session not found.</div>;
+  const toggleManualSet = (exId: string, setIndex: number) => {
+    const current = [...(setHistory[exId] || [])];
+    if (current.includes(setIndex)) {
+      setSetHistory({ ...setHistory, [exId]: current.filter(i => i !== setIndex) });
+    } else {
+      setSetHistory({ ...setHistory, [exId]: [...current, setIndex] });
+    }
+  };
 
-  const progress = exercises.length > 0 ? (completedExercises.size / exercises.length) * 100 : 0;
+  // Check if all programmed sets are done
+  const isExComplete = (ex: any) => (setHistory[ex.id]?.length || 0) >= ex.target_sets;
+  const progress = exercises.length > 0 ? (exercises.filter(isExComplete).length / exercises.length) * 100 : 0;
+
+  if (isLoading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"/></div>;
 
   return (
-    <div className="min-h-screen bg-[#050505] pb-24 pt-4 px-4 md:pt-10 md:px-8 font-sans">
+    <div className="min-h-screen bg-[#050505] pb-24 pt-12 px-6 md:pt-16 md:px-8 font-sans antialiased">
       <div className="max-w-2xl mx-auto space-y-6">
-        
-        {/* Header */}
-        <header className="flex items-center justify-between">
-          <button onClick={() => router.push("/home")} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white font-bold hover:bg-white/10 transition-colors">
-            ←
-          </button>
+        <header className="flex items-center justify-between mb-2">
+          <button onClick={() => router.push("/home")} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white font-bold hover:bg-white/10 transition-colors">←</button>
           <div className="text-center">
-            <p className="text-[10px] text-primary font-bold uppercase tracking-widest">{session.day_of_week}</p>
-            <h1 className="text-lg font-black text-white tracking-tight">{session.focus_area}</h1>
+            <p className="text-[10px] text-primary font-bold uppercase tracking-[0.2em] mb-1">{session?.day_of_week}</p>
+            <h1 className="text-xl font-black text-white tracking-tight">{session?.focus_area}</h1>
           </div>
-          <div className="w-10 h-10" /> {/* Spacer for centering */}
+          <div className="w-10 h-10" /> 
         </header>
 
-        {/* Progress Bar */}
-        <div className="bg-white/5 rounded-full h-2 w-full overflow-hidden">
-          <div className="bg-primary h-full transition-all duration-500" style={{ width: `${progress}%` }} />
+        <div className="bg-white/5 rounded-full h-1.5 w-full overflow-hidden mb-8">
+          <div className="bg-primary h-full transition-all duration-700 ease-out" style={{ width: `${progress}%` }} />
         </div>
 
-        {/* Exercises List */}
         <div className="space-y-3">
           {exercises.map((ex) => {
             const lib = ex.exercise_library;
-            const isCompleted = completedExercises.has(ex.id);
-            const isExpanded = expandedId === ex.id;
+            const completed = isExComplete(ex);
+            const expanded = expandedId === ex.id;
+            const setsDone = setHistory[ex.id] || [];
 
             return (
-              <div 
-                key={ex.id} 
-                onClick={() => setExpandedId(isExpanded ? null : ex.id)}
-                className={`rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden ${
-                  isExpanded ? "bg-white/10 border-white/20" : "bg-white/5 border-white/5"
-                }`}
-              >
-                {/* Compact View */}
-                <div className="p-4 flex items-center gap-4">
-                  {/* Custom Checkbox */}
-                  <div 
-                    onClick={(e) => toggleCheck(ex.id, e)}
-                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                      isCompleted ? "bg-primary border-primary" : "border-white/30"
-                    }`}
-                  >
-                    {isCompleted && <span className="text-black text-[10px] font-black">✓</span>}
+              <div key={ex.id} className={`rounded-2xl border transition-all duration-300 ${expanded ? "bg-white/10 border-primary/20" : "bg-white/5 border-white/5"}`}>
+                <div onClick={() => setExpandedId(expanded ? null : ex.id)} className="p-4 flex items-center gap-4 cursor-pointer">
+                  {/* Master Checkbox: Only ticks when ALL sets are done */}
+                  <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${completed ? "bg-primary border-primary shadow-[0_0_10px_rgba(208,255,0,0.3)]" : "border-white/20"}`}>
+                    {completed && <span className="text-black text-[10px] font-black">✓</span>}
                   </div>
-
-                  {/* Info */}
                   <div className="flex-1">
-                    <h3 className={`text-sm font-bold transition-colors ${isCompleted ? "text-white/50 line-through" : "text-white"}`}>
-                      {lib.name}
-                    </h3>
-                    <p className="text-[11px] text-muted font-medium mt-0.5">
-                      {ex.target_sets} Sets × {ex.target_reps} Reps
+                    <h3 className={`text-sm font-bold ${completed ? "text-white/30" : "text-white"}`}>{lib.name}</h3>
+                    <p className="text-[10px] text-white/20 font-bold uppercase mt-1">
+                      {setsDone.length} / {ex.target_sets} Sets Complete
                     </p>
-                  </div>
-
-                  {/* Badges & Expand Icon */}
-                  <div className="flex items-center gap-2">
-                    {lib.has_ai_model && (
-                      <span className="bg-primary/20 text-primary text-[9px] px-1.5 py-0.5 rounded font-black tracking-widest border border-primary/30">
-                        AI
-                      </span>
-                    )}
-                    <span className="text-white/40 text-xs">{isExpanded ? "▲" : "▼"}</span>
                   </div>
                 </div>
 
-                {/* Expanded Details View */}
-                {isExpanded && (
-                  <div className="px-4 pb-4 pt-2 border-t border-white/10 bg-black/20">
-                    
-                    {/* Placeholder for Exercise Image/Gif */}
-                    <div className="w-full h-32 bg-gradient-to-tr from-white/5 to-white/10 rounded-xl mb-4 flex flex-col items-center justify-center border border-white/5">
-                      <span className="text-3xl opacity-50">🏋️</span>
-                      <span className="text-[10px] text-white/50 uppercase tracking-widest mt-2">{lib.muscle_group} Focus</span>
+                {expanded && (
+                  <div className="px-4 pb-5 pt-2 border-t border-white/5 animate-in fade-in">
+                    <div className="w-full h-44 bg-black rounded-xl mb-6 overflow-hidden border border-white/10">
+                      <img src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=640&auto=format&fit=crop" className="w-full h-full object-cover opacity-40" />
                     </div>
 
-                    <p className="text-xs text-white/80 leading-relaxed mb-4">
-                      {lib.description || "Maintain a tight core and controlled breathing throughout the movement."}
-                    </p>
-
-                    <div className="flex justify-between items-center bg-black/30 p-3 rounded-xl mb-4 border border-white/5">
-                      <div className="text-center">
-                        <span className="block text-[10px] text-muted uppercase">Equipment</span>
-                        <span className="text-xs font-bold text-white">{lib.equipment || "Bodyweight"}</span>
-                      </div>
-                      <div className="w-px h-6 bg-white/10" />
-                      <div className="text-center">
-                        <span className="block text-[10px] text-muted uppercase">Target</span>
-                        <span className="text-xs font-bold text-white">{lib.muscle_group}</span>
-                      </div>
+                    {/* DYNAMIC SET ROWS */}
+                    <div className="space-y-2 mb-6">
+                      {[...Array(ex.target_sets)].map((_, i) => {
+                        const setDone = setsDone.includes(i);
+                        const isUnlocked = i === 0 || setsDone.includes(i - 1);
+                        return (
+                          <div key={i} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${setDone ? "bg-primary/5 border-primary/20" : isUnlocked ? "bg-white/5 border-white/10" : "opacity-30 border-transparent"}`}>
+                            <div className="flex items-center gap-3">
+                              <span className="text-[10px] font-black text-white/40">0{i+1}</span>
+                              <span className="text-xs font-bold text-white">1 × {ex.target_reps} Reps</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              {lib.has_ai_model && isUnlocked && !setDone && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); router.push(`/camera?execId=${ex.id}&target=${ex.target_reps}`); }}
+                                  className="px-3 py-1.5 bg-primary text-black text-[9px] font-black rounded-lg uppercase tracking-widest"
+                                >
+                                  Launch AI
+                                </button>
+                              )}
+                              <div 
+                                onClick={(e) => { e.stopPropagation(); if(isUnlocked) toggleManualSet(ex.id, i); }}
+                                className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${setDone ? "bg-primary border-primary" : "border-white/20"}`}
+                              >
+                                {setDone && <span className="text-black text-[9px] font-black">✓</span>}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-
-                    {/* AI Camera Launch Button */}
-                    {lib.has_ai_model && (
-                      <Button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push("/camera"); // Routes to the perfect camera page we just made!
-                        }}
-                        className="w-full h-12 bg-primary text-black font-black text-xs rounded-xl shadow-[0_0_15px_rgba(208,255,0,0.2)] hover:scale-[1.02]"
-                      >
-                        LAUNCH AI TRACKER
-                      </Button>
-                    )}
                   </div>
                 )}
               </div>
@@ -180,13 +153,9 @@ function WorkoutContent() {
           })}
         </div>
         
-        {/* Finish Session Button */}
-        {completedExercises.size === exercises.length && exercises.length > 0 && (
-          <Button 
-            onClick={() => router.push("/home")}
-            className="w-full h-14 bg-white text-black font-black mt-8 rounded-2xl"
-          >
-            FINISH WORKOUT 🏆
+        {exercises.every(isExComplete) && exercises.length > 0 && (
+          <Button onClick={handleFinishWorkout} disabled={isFinishing} className="w-full h-14 bg-white text-black font-black mt-10 rounded-2xl shadow-2xl">
+            {isFinishing ? "FINALIZING..." : "FINISH WORKOUT 🏆"}
           </Button>
         )}
       </div>
@@ -194,11 +163,4 @@ function WorkoutContent() {
   );
 }
 
-// Next.js requires SearchParams to be wrapped in a Suspense boundary
-export default function WorkoutPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-[#050505]" />}>
-      <WorkoutContent />
-    </Suspense>
-  );
-}
+export default function WorkoutPage() { return <Suspense fallback={<div className="min-h-screen bg-[#050505]" />}><WorkoutContent /></Suspense>; }

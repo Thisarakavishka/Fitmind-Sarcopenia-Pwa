@@ -6,7 +6,7 @@ import { createClient } from "../../../lib/supabase/client";
 import { useUserStore } from "../../../lib/store/userStore";
 import { predictWorkoutPlan } from "../../../lib/ai/scheduler";
 import { generateScheduleInDB } from "../../../lib/ai/templateBuilder";
-import { Button } from "@/src/components/ui/Button";
+import { Button } from "@/src/components/shared/Button";
 
 type Gender = "male" | "female";
 type Goal = "muscle" | "weight_loss" | "sarcopenia_prevention";
