@@ -1,6 +1,6 @@
 "use client";
 
-import { Card } from "../../../components/ui/Card";
+import { Card } from "../../../components/shared/Card";
 
 export function ActivityHeatmap() {
   // 1. Generate Dummy Data (14 Weeks x 7 Days) to match screenshot

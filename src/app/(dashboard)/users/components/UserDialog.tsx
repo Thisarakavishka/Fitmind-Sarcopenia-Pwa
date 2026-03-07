@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Button } from "../../../../components/ui/Button";
+import { Button } from "../../../../components/shared/Button";
 
 interface UserDialogProps {
   isOpen: boolean;

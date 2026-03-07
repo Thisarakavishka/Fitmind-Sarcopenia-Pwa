@@ -2,25 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { useUserStore } from "../../../lib/store/userStore";
-import { Button } from "../../../components/ui/Button";
-import { Card } from "../../../components/ui/Card";
+import { Button } from "../../../components/shared/Button";
+import { Card } from "../../../components/shared/Card";
 import { createClient } from "../../../lib/supabase/client";
 import { useRouter } from "next/navigation";
 
 export default function HomePage() {
-  const { name, age, level } = useUserStore();
+  const { name } = useUserStore();
   const supabase = createClient();
   const router = useRouter();
 
   const [activePlan, setActivePlan] = useState<any>(null);
   const [sessions, setSessions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // MOCK HEATMAP DATA: This generates random true/false values.
-  // In the future, we will fetch completed dates from the database!
-  const [heatmapData] = useState(() => 
-    Array.from({ length: 84 }).map(() => Math.random() > 0.75) 
-  );
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  
+  // REAL DATA STATES
+  const [heatmapData, setHeatmapData] = useState<boolean[]>(new Array(84).fill(false));
+  const [hasDoneWorkoutToday, setHasDoneWorkoutToday] = useState(false);
 
   useEffect(() => {
     async function fetchDashboardData() {
@@ -28,28 +27,53 @@ export default function HomePage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        const { data: planData, error: planError } = await supabase
-          .from("workout_plans")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("is_active", true)
-          .single();
+        // 1. Fetch Plan
+        const { data: planData } = await supabase.from("workout_plans").select("*")
+          .eq("user_id", user.id).eq("is_active", true).single();
 
-        if (planError || !planData) {
-          setIsLoading(false); return;
-        }
+        if (!planData) { setIsLoading(false); return; }
         setActivePlan(planData);
 
-        // REAL DATA: Fetching the exact schedule the AI built for you
-        const { data: sessionData, error: sessionError } = await supabase
-          .from("workout_sessions")
-          .select(`*, session_exercises (target_sets, target_reps, exercise_library (name))`)
-          .eq("plan_id", planData.id)
-          .order("day_of_week", { ascending: true });
+        // 2. Fetch Sessions
+        const { data: sessionData } = await supabase.from("workout_sessions")
+          .select(`*, session_exercises (target_sets, target_reps, exercise_library (name, has_ai_model))`)
+          .eq("plan_id", planData.id).order("day_of_week", { ascending: true });
 
-        if (!sessionError && sessionData) setSessions(sessionData);
+        if (sessionData) setSessions(sessionData);
+
+        // 3. Fetch History & Check Today's Status
+        const { data: logs } = await supabase.from("workout_history_logs")
+          .select("date_completed").eq("user_id", user.id);
+
+        if (logs) {
+          const newHeatmap = new Array(84).fill(false);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0); // Reset for clean date comparison
+
+          let doneToday = false;
+
+          logs.forEach(log => {
+            const logDate = new Date(log.date_completed);
+            
+            // Check if any log matches Today's date
+            const comparisonDate = new Date(logDate);
+            comparisonDate.setHours(0, 0, 0, 0);
+            if (comparisonDate.getTime() === today.getTime()) {
+              doneToday = true;
+            }
+
+            // Populate Matrix
+            const diffDays = Math.floor((new Date().getTime() - logDate.getTime()) / (1000 * 3600 * 24));
+            if (diffDays >= 0 && diffDays < 84) {
+              newHeatmap[83 - diffDays] = true; 
+            }
+          });
+
+          setHeatmapData(newHeatmap);
+          setHasDoneWorkoutToday(doneToday);
+        }
       } catch (error) {
-        console.error("Error:", error);
+        console.error("Dashboard Sync Error:", error);
       } finally {
         setIsLoading(false);
       }
@@ -57,119 +81,137 @@ export default function HomePage() {
     fetchDashboardData();
   }, [supabase]);
 
+  // Logic: Find the first incomplete session
+  const nextSession = sessions.find(s => !s.is_completed) || sessions[0];
+  
+  // Logic: Is the button globally locked?
+  const isButtonLocked = hasDoneWorkoutToday || (nextSession?.is_completed);
+
   return (
-    // 🌟 FIX: Removed max-width limits and adjusted padding for both mobile and desktop
-    <div className="w-full min-h-screen bg-transparent pb-24 pt-2 px-2 sm:px-6 md:pt-8 md:px-8 font-sans">
-      
-      {/* 🌟 FIX: Increased max-w to 5xl so it stretches nicely on Desktop */}
-      <div className="max-w-5xl mx-auto space-y-6 md:space-y-8">
+    <div className="w-full min-h-screen bg-transparent pb-28 pt-4 px-4 md:px-10 font-sans antialiased">
+      <div className="max-w-5xl mx-auto space-y-6">
         
-        {/* --- HEADER --- */}
-        <header className="flex items-center justify-between animate-in fade-in slide-in-from-top-4 px-2">
+        {/* HEADER */}
+        <header className="flex justify-between items-center py-2">
           <div>
-            <p className="text-muted text-[10px] md:text-xs font-bold tracking-widest uppercase mb-1">
-              {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-            </p>
-            <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
-              Hello, <span className="capitalize text-primary">{name?.split(" ")[0] || "Athlete"}</span>
+            <h1 className="text-xl font-bold text-white tracking-tight">
+              Welcome, <span className="text-primary">{name?.split(" ")[0] || "User"}</span>
             </h1>
+            <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest mt-1">
+              {hasDoneWorkoutToday ? 'Status: Recovery Phase Active' : 'Status: System Ready'}
+            </p>
           </div>
-          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-sm md:text-base font-bold text-white shadow-lg">
-            {name ? name.charAt(0).toUpperCase() : "A"}
-          </div>
+          <button 
+            onClick={() => router.push("/profile")}
+            className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xs font-bold text-white hover:bg-white/10 transition-colors"
+          >
+            {name ? name.charAt(0).toUpperCase() : "U"}
+          </button>
         </header>
 
-        {/* --- ACTIVITY HEATMAP --- */}
-        <Card className="p-4 md:p-6 rounded-3xl border-white/5 bg-[#121212]/60 backdrop-blur-md w-full overflow-hidden">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xs font-bold text-white uppercase tracking-widest">Activity</h3>
-            <span className="text-[10px] text-muted font-bold">Last 12 Weeks</span>
+        {/* ACTIVITY MATRIX */}
+        <Card className="p-6 rounded-[2rem] border-white/5 bg-[#0a0a0a]/40 backdrop-blur-xl">
+           <div className="flex justify-between items-center mb-6 text-white">
+            <div>
+              <h3 className="text-sm font-bold tracking-tight">Activity Archive</h3>
+              <p className="text-[10px] text-white/30 font-medium">Daily compliance tracking</p>
+            </div>
+            <div className="flex flex-col items-end">
+              <span className="text-lg font-black text-primary leading-none">
+                {heatmapData.filter(x => x).length}
+              </span>
+              <span className="text-[9px] font-bold text-white/20 uppercase tracking-tighter">Logs</span>
+            </div>
           </div>
-          
-          <div className="overflow-x-auto pb-2 scrollbar-hide">
-            <div className="flex gap-1.5 md:gap-2 min-w-max">
-              {/* Day Labels */}
-              <div className="grid grid-rows-7 gap-1.5 md:gap-2 text-[9px] font-bold text-muted/50 text-right pr-2 pt-0.5">
-                <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+
+          <div className="overflow-x-auto no-scrollbar py-1">
+            <div className="flex gap-3 min-w-max items-center">
+              <div className="flex flex-col gap-2 text-[7px] font-black text-white/10 uppercase italic">
+                <span>M</span><span>W</span><span>F</span><span>S</span>
               </div>
-              
-              {/* Heatmap Grid (Matches your yellow reference image) */}
               <div className="grid grid-rows-7 grid-flow-col gap-1.5 md:gap-2">
-                {heatmapData.map((isActive, i) => (
-                  <div 
-                    key={i} 
-                    className={`w-3.5 h-3.5 md:w-4 md:h-4 rounded-[3px] md:rounded-sm transition-colors ${
-                      isActive ? "bg-primary shadow-[0_0_8px_rgba(208,255,0,0.3)]" : "bg-white/5"
-                    }`}
-                  />
+                {heatmapData.map((active, i) => (
+                  <div key={i} className={`w-3.5 h-3.5 md:w-4 md:h-4 rounded-[4px] transition-all duration-700 ${active ? "bg-gradient-to-br from-primary to-primary/60 shadow-[0_0_10px_rgba(208,255,0,0.2)]" : "bg-white/[0.04]"}`} />
                 ))}
               </div>
             </div>
           </div>
         </Card>
 
-        {/* --- MAIN DASHBOARD CONTENT --- */}
-        <main>
+        <main className="space-y-4">
           {isLoading ? (
-            <div className="flex justify-center py-10"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>
+            <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
           ) : activePlan ? (
-            <div className="space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4">
-              
-              {/* Hero Plan Card */}
-              <Card className="relative overflow-hidden rounded-3xl border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6 md:p-10 w-full">
-                <div className="absolute -top-10 -right-10 w-40 h-40 bg-primary/20 blur-[60px] rounded-full pointer-events-none"></div>
-
-                <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
-                  <div>
-                    <span className="inline-block px-2 py-1 mb-3 rounded-md bg-primary/20 text-primary text-[10px] md:text-xs font-bold uppercase tracking-widest">
-                      AI GENERATED
-                    </span>
-                    <h2 className="text-2xl md:text-4xl font-black text-white leading-tight">
-                      {activePlan.name}
-                    </h2>
-                  </div>
-
-                  <Button
-                    onClick={() => {
-                      const nextSessionId = sessions[0]?.id;
-                      if (nextSessionId) router.push(`/workout?sessionId=${nextSessionId}`);
-                    }}
-                    className="w-full md:w-auto px-8 bg-primary text-black font-black h-14 text-sm rounded-xl hover:scale-[1.02] transition-transform active:scale-95 shadow-[0_0_20px_rgba(208,255,0,0.2)]"
-                  >
-                    START TODAY'S SESSION
-                  </Button>
+            <>
+              {/* CURRENT PROGRAM CARD */}
+              <Card className="p-6 rounded-2xl border-white/10 bg-gradient-to-tr from-white/5 to-transparent flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div className="space-y-1">
+                  <span className="text-[9px] font-black text-primary uppercase tracking-[0.2em] block">Active Program</span>
+                  <h2 className="text-xl font-bold text-white tracking-tight">{activePlan.name}</h2>
                 </div>
+                
+                {/* 🌟 ENHANCED BUTTON LOCK: Real-world constraint */}
+                <Button
+                  disabled={isButtonLocked}
+                  onClick={() => router.push(`/workout?sessionId=${nextSession?.id}`)}
+                  className={`w-full md:w-auto px-10 h-12 font-bold text-xs uppercase rounded-xl transition-all ${
+                    isButtonLocked 
+                      ? "bg-white/5 text-white/20 cursor-not-allowed border border-white/5" 
+                      : "bg-primary text-black hover:opacity-90 shadow-[0_0_20px_rgba(208,255,0,0.1)]"
+                  }`}
+                >
+                  {hasDoneWorkoutToday ? "Rest for next session" : nextSession?.is_completed ? "Program Completed" : "Launch Session"}
+                </Button>
               </Card>
 
-              {/* Sessions List */}
-              <div className="space-y-3 md:space-y-4 px-1">
-                <h3 className="text-sm md:text-base font-bold text-white tracking-tight">Weekly Split</h3>
-                
-                {/* 🌟 FIX: Uses a CSS Grid on desktop so cards sit side-by-side! */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-                  {sessions.map((session, index) => (
-                    <div key={session.id} className="flex items-center gap-4 p-4 rounded-2xl bg-[#121212]/60 border border-white/5 hover:bg-white/5 transition-colors group">
-                      <div className="flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-black/50 border border-white/5 group-hover:border-primary/30 transition-colors">
-                        <span className="text-[9px] uppercase font-bold text-muted">Day</span>
-                        <span className="text-base font-black text-white group-hover:text-primary transition-colors">{session.day_of_week.replace("Day ", "")}</span>
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center">
-                           <h4 className="text-sm md:text-base font-bold text-white">{session.focus_area}</h4>
-                           <span className="text-[10px] font-bold text-primary">{index === 0 ? "NEXT" : ""}</span>
+              {/* WEEKLY BREAKDOWN */}
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-1">Program Structure</p>
+                <div className="grid grid-cols-1 gap-2">
+                  {sessions.map((session) => {
+                    const isExpanded = expandedId === session.id;
+                    const isDone = session.is_completed;
+                    return (
+                      <div key={session.id} className="flex flex-col">
+                        <div
+                          onClick={() => setExpandedId(isExpanded ? null : session.id)}
+                          className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all border ${
+                            isExpanded ? 'bg-white/5 border-primary/20' : 'bg-[#0f0f0f] border-white/5'
+                          } ${isDone ? "opacity-40" : ""}`}
+                        >
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-[10px] border ${
+                            isDone ? "bg-primary/20 border-primary/40 text-primary" : "bg-black/40 border-white/5 text-white/40"
+                          }`}>
+                            {isDone ? "✓" : session.day_of_week.replace("Day ", "")}
+                          </div>
+                          <div className="flex-1">
+                            <h4 className={`text-sm font-bold ${isDone ? 'text-white/40 line-through' : 'text-white'}`}>
+                              {session.focus_area}
+                            </h4>
+                          </div>
+                          <svg className={`w-4 h-4 text-white/20 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                          </svg>
                         </div>
-                        <p className="text-xs text-muted truncate mt-1">
-                          {session.session_exercises?.length || 0} exercises programmed
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
 
+                        {isExpanded && (
+                          <div className="mx-2 p-4 bg-white/[0.01] border-x border-b border-white/5 rounded-b-xl space-y-3">
+                            {session.session_exercises.map((se: any, idx: number) => (
+                              <div key={idx} className="flex justify-between items-center text-[10px] font-medium border-b border-white/5 pb-2 last:border-0 last:pb-0">
+                                <span className="text-white/60">{se.exercise_library?.name}</span>
+                                <span className="text-primary/60">{se.target_sets}×{se.target_reps}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            </>
           ) : (
-            <div className="p-8 text-center"><p className="text-muted">No plan found.</p></div>
+            <div className="py-20 text-center border border-dashed border-white/10 rounded-2xl text-white/20 font-bold uppercase text-[10px]">No Program Initialized</div>
           )}
         </main>
       </div>

@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "../../../lib/supabase/client";
-import { Button } from "../../../components/ui/Button";
-import { Card } from "../../../components/ui/Card";
-import { Icons } from "../../../components/ui/Icon"; // Ensure you import Icons
+import { Button } from "../../../components/shared/Button";
+import { Card } from "../../../components/shared/Card";
+import { Icons } from "../../../components/shared/Icon"; // Ensure you import Icons
 
 export default function ProfilePage() {
   const supabase = createClient();
