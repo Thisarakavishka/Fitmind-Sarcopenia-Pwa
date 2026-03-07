@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button } from "../components/ui/Button";
+import { Button } from "../components/shared/Button";
 import { createClient } from "../lib/supabase/client";
 
 export default function LandingPage() {

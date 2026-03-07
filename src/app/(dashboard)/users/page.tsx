@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchAllUsers, deleteUser, banUser, updateUser } from "../../actions/admins"; 
-import { Button } from "../../../components/ui/Button";
+import { Button } from "../../../components/shared/Button";
 import { UserDialog } from "./components/UserDialog"; 
 
 export default function AdminUsersPage() {

@@ -1,93 +1,83 @@
-// lib/ai/templateBuilder.ts
 import { createClient } from "../supabase/client";
 
 export async function generateScheduleInDB(userId: string, aiPlanTag: string) {
   const supabase = createClient();
 
-  // 1. Create the Main Plan
-  const { data: planData, error: planError } = await supabase
+  // 1. GET THE MASTER BLUEPRINT
+  const { data: template, error: tError } = await supabase
+    .from("workout_templates")
+    .select(`
+      id, name, 
+      template_exercises (
+        exercise_id, day_number, target_sets, target_reps, order_index
+      )
+    `)
+    .eq("ai_tag", aiPlanTag)
+    .single();
+
+  if (tError || !template) {
+    console.error("Template not found for tag:", aiPlanTag);
+    return null;
+  }
+
+  // 2. CREATE THE USER'S PERSONAL PLAN
+  const { data: plan, error: pError } = await supabase
     .from("workout_plans")
     .insert({
       user_id: userId,
-      name: aiPlanTag.replace(/_/g, " "),
-      source_type: "AI_Generated",
-      start_date: new Date().toISOString().split('T')[0],
-      is_active: true
+      name: `Personal: ${template.name}`,
+      ai_tag: aiPlanTag,
+      is_active: true,
     })
     .select()
     .single();
 
-  if (planError) return null;
-  const planId = planData.id;
+  if (pError) return null;
 
-  // 2. Define Professional Clinical & Fitness Routines
-  let sessionsToBuild: { day: string; focus: string }[] = [];
+  // 🌟 3. GENERATE 28 DAYS OF REAL DATED SESSIONS
+  const templateDays = Array.from(new Set(template.template_exercises.map((te) => te.day_number)));
+  const totalDays = 28; // Full Month Roadmap
+  const startDate = new Date();
+  startDate.setHours(0, 0, 0, 0);
 
-  switch (aiPlanTag) {
-    case "Hypertrophy_Muscle_Builder":
-      sessionsToBuild = [
-        { day: "Day 1", focus: "Chest & Triceps" },
-        { day: "Day 2", focus: "Back & Biceps" },
-        { day: "Day 4", focus: "Legs & Core (Squat AI Focus)" },
-      ];
-      break;
-    case "Athlete_Performance":
-      sessionsToBuild = [
-        { day: "Day 1", focus: "Push (Chest, Shoulders, Tris)" },
-        { day: "Day 3", focus: "Legs (Heavy Squats)" },
-      ];
-      break;
-    case "Silver_Mobility_Rehab":
-      sessionsToBuild = [
-        { day: "Day 1", focus: "Joint Mobility & Stretching" },
-        { day: "Day 3", focus: "Chair Stand Sarcopenia Focus" },
-      ];
-      break;
-    default:
-      sessionsToBuild = [
-        { day: "Day 1", focus: "Full Body Foundation" },
-        { day: "Day 3", focus: "Lower Body Burn" }
-      ];
-  }
+  for (let i = 0; i < totalDays; i++) {
+    const currentDate = new Date(startDate);
+    currentDate.setDate(startDate.getDate() + i);
 
-  // 3. Fetch the Exercise IDs from the library we just created!
-  const { data: exercises } = await supabase.from("exercise_library").select("id, name");
-  const squatId = exercises?.find((e) => e.name === 'Bodyweight Squat')?.id;
-  const chairStandId = exercises?.find((e) => e.name === 'Chair Stand')?.id;
-  const pushupId = exercises?.find((e) => e.name === 'Push-up')?.id;
+    // Protocol Logic: 2 Days Training, 1 Day Rest
+    const isRestDay = i % 3 === 2;
+    if (isRestDay) continue; // We don't create a row for rest, or you can create one with focus_area: "Rest"
 
-  // 4. Insert the Sessions AND the Exercises
-  for (const session of sessionsToBuild) {
-    const { data: sessionData, error: sessionError } = await supabase
+    // Map the loop index to the template sequence (e.g., 0->Day1, 1->Day2, 3->Day1)
+    const dayNum = templateDays[i % templateDays.length];
+
+    const { data: session, error: sError } = await supabase
       .from("workout_sessions")
       .insert({
-        plan_id: planId,
-        day_of_week: session.day,
-        focus_area: session.focus,
-        is_completed: false
+        plan_id: plan.id,
+        day_of_week: `Day ${dayNum}`,
+        focus_area: template.name,
+        scheduled_date: currentDate.toISOString().split('T')[0], // 🌟 THE FIX: Hard-coding the real date
+        is_completed: false,
       })
       .select()
       .single();
 
-    if (!sessionError && sessionData) {
-      // 5. ATTACH EXERCISES TO THE SESSION based on the focus!
-      let exercisesToInsert = [];
+    if (session && !sError) {
+      // 4. CLONE EXERCISES FOR THIS SPECIFIC DATE
+      const exercisesForThisDay = template.template_exercises
+        .filter((te) => te.day_number === dayNum)
+        .map((te) => ({
+          session_id: session.id,
+          exercise_id: te.exercise_id,
+          target_sets: te.target_sets,
+          target_reps: te.target_reps,
+          order_index: te.order_index,
+        }));
 
-      // If it's a Leg/Lower Body/Chair day, add the AI-tracked exercises
-      if ((session.focus.includes("Legs") || session.focus.includes("Lower")) && squatId) {
-        exercisesToInsert.push({ session_id: sessionData.id, exercise_id: squatId, target_sets: 3, target_reps: 10, order_index: 1 });
-      } else if (session.focus.includes("Chair") && chairStandId) {
-        exercisesToInsert.push({ session_id: sessionData.id, exercise_id: chairStandId, target_sets: 3, target_reps: 8, order_index: 1 });
-      } else if ((session.focus.includes("Chest") || session.focus.includes("Push") || session.focus.includes("Full")) && pushupId) {
-        exercisesToInsert.push({ session_id: sessionData.id, exercise_id: pushupId, target_sets: 3, target_reps: 12, order_index: 1 });
-      }
-
-      // Insert into the mapping table
-      if (exercisesToInsert.length > 0) {
-        await supabase.from("session_exercises").insert(exercisesToInsert);
-      }
+      await supabase.from("session_exercises").insert(exercisesForThisDay);
     }
   }
 
-  return planId;
+  return plan.id;
 }

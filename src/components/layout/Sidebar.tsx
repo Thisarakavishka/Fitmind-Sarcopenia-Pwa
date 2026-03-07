@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Icons } from "../ui/Icon";
+import { Icons } from "../shared/Icon";
 import { useEffect, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
-import { Button } from "../ui/Button";
+import { Button } from "../shared/Button";
 
 export function Sidebar() {
   const pathname = usePathname();

@@ -1,248 +1,136 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, Suspense } from "react";
 import * as tf from "@tensorflow/tfjs";
 import * as poseDetection from "@tensorflow-models/pose-detection";
 import "@tensorflow/tfjs-backend-webgl";
-import { useRouter } from "next/navigation";
-import { Button } from "../../../components/ui/Button";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "../../../lib/supabase/client";
+import { Button } from "../../../components/shared/Button";
 
-export default function CameraPage() {
+function CameraContent() {
   const router = useRouter();
+  const supabase = createClient();
+  const searchParams = useSearchParams();
+  const execId = searchParams.get("execId");
+  const targetReps = parseInt(searchParams.get("target") || "10");
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
   const [isLoaded, setIsLoaded] = useState(false);
   const [repCount, setRepCount] = useState(0);
   const [feedback, setFeedback] = useState("Initializing AI...");
-  const [bodyDetected, setBodyDetected] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const detectorRef = useRef<poseDetection.PoseDetector | null>(null);
   const classifierRef = useRef<tf.LayersModel | null>(null);
   const isSquattingRef = useRef(false);
   const repCountRef = useRef(0);
+  const accuracyScores = useRef<number[]>([]);
 
   useEffect(() => {
-    let stream: MediaStream | null = null;
-
     async function setupAI() {
       try {
         await tf.ready();
-        
-        detectorRef.current = await poseDetection.createDetector(
-          poseDetection.SupportedModels.BlazePose,
-          { runtime: "tfjs", modelType: "lite" }
-        );
-
+        detectorRef.current = await poseDetection.createDetector(poseDetection.SupportedModels.BlazePose, { runtime: "tfjs", modelType: "lite" });
         classifierRef.current = await tf.loadLayersModel("/models/squat/model.json");
-
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "user" } // Removed ideal constraints to prevent conflicts
-          });
-          
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            videoRef.current.onloadedmetadata = () => {
-              videoRef.current!.play();
-              setIsLoaded(true);
-              setFeedback("Step into frame");
-              startDetecting();
-            };
-          }
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => { videoRef.current!.play(); setIsLoaded(true); startDetecting(); };
         }
-      } catch (error) {
-        console.error("🚨 AI/Camera Init Error:", error);
-        setFeedback("Camera Error. Check Permissions.");
-      }
+      } catch (e) { setFeedback("Camera Error"); }
     }
-
     setupAI();
-    return () => {
-      if (stream) stream.getTracks().forEach(track => track.stop());
-    };
   }, []);
 
+  // 🌟 Auto-finish set
+  useEffect(() => {
+    if (repCount >= targetReps && !isSaving) {
+      const saveSet = async () => {
+        setIsSaving(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        const avgScore = accuracyScores.current.length > 0 ? accuracyScores.current.reduce((a,b)=>a+b)/accuracyScores.current.length : 0;
+        if (user && execId) {
+          await supabase.from("workout_history_logs").insert({
+            user_id: user.id,
+            session_exercise_id: execId,
+            actual_reps_completed: repCountRef.current,
+            ai_form_accuracy_score: Math.round(avgScore * 100),
+          });
+        }
+        if (navigator.vibrate) navigator.vibrate(200);
+        router.back();
+      };
+      saveSet();
+    }
+  }, [repCount]);
+
   const startDetecting = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-
-    async function detectFrame() {
-      if (!ctx || !detectorRef.current || !classifierRef.current) return;
-
-      try {
-        if (video.readyState === 4) {
-          // Exactly as it was in your working test file
-          const videoWidth = video.videoWidth || 640;
-          const videoHeight = video.videoHeight || 480;
-          
-          if (videoWidth > 0 && videoHeight > 0) {
-            canvas.width = videoWidth;
-            canvas.height = videoHeight;
-          }
-
-          const poses = await detectorRef.current.estimatePoses(video, { flipHorizontal: false });
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-          if (poses.length > 0) {
-            setBodyDetected(true);
-            const pose = poses[0];
-            const keypoints = pose.keypoints;
-
-            try {
-              // EXACT custom model math from your test file
-              let inputArray: number[] = [];
-              keypoints.forEach((kp) => {
-                inputArray.push(kp.x / videoWidth);
-                inputArray.push(kp.y / videoHeight);
-                inputArray.push(kp.z || 0);
-                inputArray.push(kp.score || 0);
-              });
-
-              const inputTensor = tf.tensor2d([inputArray]);
-              const prediction = classifierRef.current.predict(inputTensor) as tf.Tensor;
-              const score = prediction.dataSync()[0];
-              inputTensor.dispose();
-
-              const isGoodForm = score > 0.5;
-              const skeletonColor = isGoodForm ? "#D0FF00" : "#EF4444"; // Neon Green or Red
-              
-              setFeedback(isGoodForm ? "Good Form!" : "Fix Your Posture!");
-              drawSkeleton(keypoints, ctx, skeletonColor);
-
-              // REP COUNTING (Exact test logic)
-              const leftHip = keypoints[23];
-              const leftKnee = keypoints[25];
-
-              if (leftHip && leftKnee && leftHip.score != null && leftKnee.score != null && leftHip.score > 0.5 && leftKnee.score > 0.5) {
-                  if (leftHip.y > leftKnee.y - 40 && !isSquattingRef.current) {
-                      isSquattingRef.current = true;
-                  }
-                  if (leftHip.y < leftKnee.y - 80 && isSquattingRef.current) {
-                      isSquattingRef.current = false;
-                      if (isGoodForm) {
-                          repCountRef.current += 1;
-                          setRepCount(repCountRef.current);
-                      }
-                  }
-              }
-            } catch (modelError) {
-              console.error("🚨 Custom Model Math Error:", modelError);
-            }
-
-          } else {
-            setBodyDetected(false);
-            setFeedback("Scanning for body...");
+    const video = videoRef.current!;
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext("2d")!;
+    const detect = async () => {
+      if (!detectorRef.current || !classifierRef.current || video.readyState !== 4) { requestAnimationFrame(detect); return; }
+      const poses = await detectorRef.current.estimatePoses(video);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (poses.length > 0) {
+        const keypoints = poses[0].keypoints;
+        const videoWidth = video.videoWidth, videoHeight = video.videoHeight;
+        let input: number[] = [];
+        keypoints.forEach(kp => { input.push(kp.x/videoWidth, kp.y/videoHeight, kp.z||0, kp.score||0); });
+        const tensor = tf.tensor2d([input]);
+        const pred = classifierRef.current.predict(tensor) as tf.Tensor;
+        const score = (await pred.data())[0];
+        accuracyScores.current.push(score);
+        const good = score > 0.5;
+        setFeedback(good ? "Correct Form" : "Adjust Posture");
+        drawSkeleton(keypoints, ctx, good ? "#D0FF00" : "#EF4444");
+        const hip = keypoints[23], knee = keypoints[25];
+        if (hip.score! > 0.5 && knee.score! > 0.5) {
+          if (hip.y > knee.y - 40 && !isSquattingRef.current) isSquattingRef.current = true;
+          if (hip.y < knee.y - 80 && isSquattingRef.current) {
+            isSquattingRef.current = false;
+            if (good) { repCountRef.current++; setRepCount(repCountRef.current); }
           }
         }
-      } catch (error) {
-        console.error("🚨 Detection loop error:", error);
+        tensor.dispose(); pred.dispose();
       }
-      
-      requestAnimationFrame(detectFrame);
-    }
-    detectFrame();
+      requestAnimationFrame(detect);
+    };
+    detect();
   };
 
-  const drawSkeleton = (keypoints: poseDetection.Keypoint[], ctx: CanvasRenderingContext2D, color: string) => {
-    const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.BlazePose);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 6;
-
-    adjacentPairs.forEach(([i, j]) => {
-      const kp1 = keypoints[i];
-      const kp2 = keypoints[j];
-      
-      if (kp1.score != null && kp2.score != null && kp1.score > 0.2 && kp2.score > 0.2) {
-        ctx.beginPath();
-        ctx.moveTo(kp1.x, kp1.y);
-        ctx.lineTo(kp2.x, kp2.y);
-        ctx.stroke();
-      }
-    });
-
-    ctx.fillStyle = "white";
-    keypoints.forEach((kp) => {
-      if (kp.score != null && kp.score > 0.2) {
-        ctx.beginPath();
-        ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
-        ctx.fill();
-      }
+  const drawSkeleton = (kps: any[], ctx: any, color: string) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 6;
+    poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.BlazePose).forEach(([i,j]) => {
+      const kp1 = kps[i], kp2 = kps[j];
+      if (kp1.score! > 0.3 && kp2.score! > 0.3) { ctx.beginPath(); ctx.moveTo(kp1.x, kp1.y); ctx.lineTo(kp2.x, kp2.y); ctx.stroke(); }
     });
   };
 
   return (
-    <div className="flex flex-col h-screen bg-black text-white overflow-hidden font-sans">
-      
-      {/* Header UI */}
-      <div className="absolute top-0 inset-x-0 p-4 z-30 flex justify-between items-start pointer-events-none">
-        <Button 
-          onClick={() => router.back()} 
-          className="pointer-events-auto bg-black/50 backdrop-blur-md border border-white/10 hover:bg-white/10 rounded-2xl px-6"
-        >
-          ✕ Quit
-        </Button>
-
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex items-center gap-2 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
-            <div className={`w-2 h-2 rounded-full ${bodyDetected ? "bg-primary animate-pulse" : "bg-red-500"}`} />
-            <span className={`text-[10px] font-bold uppercase tracking-widest ${bodyDetected ? "text-primary" : "text-red-500"}`}>
-              {bodyDetected ? "AI Active" : "No Body Found"}
-            </span>
-          </div>
-          
-          <div className="bg-black/50 backdrop-blur-md px-6 py-4 rounded-3xl border border-white/10 text-center shadow-2xl">
-            <p className="text-xs text-primary font-black uppercase tracking-widest mb-1">Rep Counter</p>
-            <p className="text-5xl font-black tabular-nums">{repCount}</p>
-          </div>
+    <div className="h-screen bg-black text-white flex flex-col">
+      <div className="absolute top-0 inset-x-0 p-6 z-30 flex justify-between items-start">
+        <Button onClick={() => router.back()} className="bg-white/10 px-6">✕ Quit</Button>
+        <div className="bg-black/60 p-5 rounded-3xl border border-white/10 text-center">
+          <p className="text-[10px] text-primary font-black uppercase tracking-widest mb-1">Target: {targetReps}</p>
+          <p className="text-5xl font-black tabular-nums">{repCount}</p>
         </div>
       </div>
-
-      {/* Camera Stage */}
-      <div className="relative flex-1 bg-[#0a0a0a] flex items-center justify-center p-4">
-        {!isLoaded && (
-          <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center">
-            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-primary font-bold tracking-widest animate-pulse uppercase">Warming Up Camera...</p>
-          </div>
-        )}
-
-        {/* 🌟 THE FIX: Hardcoded width/height to stop TFJS from crashing! */}
-        <div ref={containerRef} className="relative w-full max-w-2xl aspect-[4/3] bg-black rounded-[2rem] overflow-hidden border-2 border-white/10 shadow-2xl">
-          <video 
-            ref={videoRef} 
-            playsInline 
-            muted 
-            width={640}
-            height={480}
-            className="absolute inset-0 w-full h-full object-cover -scale-x-100" 
-          />
-          <canvas 
-            ref={canvasRef} 
-            width={640}
-            height={480}
-            className="absolute inset-0 w-full h-full object-cover -scale-x-100 z-10" 
-          />
+      <div className="flex-1 relative flex items-center justify-center p-4">
+        <div className="relative w-full max-w-2xl aspect-[4/3] bg-black rounded-[2rem] overflow-hidden border-2 border-white/10">
+          <video ref={videoRef} playsInline muted width={640} height={480} className="absolute inset-0 w-full h-full object-cover -scale-x-100" />
+          <canvas ref={canvasRef} width={640} height={480} className="absolute inset-0 w-full h-full object-cover -scale-x-100 z-10" />
         </div>
-
-        {/* Dynamic Feedback Overlay */}
-        <div className="absolute bottom-8 inset-x-0 flex justify-center px-4 z-20">
-          <div className={`w-full max-w-md py-4 rounded-2xl border-2 backdrop-blur-xl transition-all duration-300 shadow-2xl ${
-            feedback === "Good Form!" 
-              ? "bg-primary/20 border-primary text-primary" 
-              : feedback === "Step into frame" || feedback.includes("Scanning")
-              ? "bg-white/10 border-white/20 text-white"
-              : "bg-red-500/20 border-red-500 text-red-400"
-          }`}>
-            <p className="text-center text-xl font-black uppercase tracking-tight">
-              {feedback}
-            </p>
+        <div className="absolute bottom-10 px-6 w-full max-w-md">
+          <div className={`p-4 rounded-2xl border-2 text-center text-xl font-black uppercase ${feedback.includes("Correct") ? "bg-primary/20 border-primary text-primary" : "bg-red-500/20 border-red-500 text-red-400"}`}>
+            {feedback}
           </div>
         </div>
       </div>
     </div>
   );
 }
+
+export default function CameraPage() { return <Suspense><CameraContent /></Suspense>; }

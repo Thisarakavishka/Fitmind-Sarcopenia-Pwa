@@ -1,180 +1,226 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createClient } from "../../../lib/supabase/client";
-import { Button } from "../../../components/ui/Button";
-import { Card } from "../../../components/ui/Card";
+import { Button } from "../../../components/shared/Button";
+import { Card } from "../../../components/shared/Card";
 import { CreateTemplateModal } from "./components/CreateTemplateModal";
-import { ExerciseManagerModal } from "./components/ExerciseManagerModal"; // Import the DB Modal
 
 export default function TemplatePage() {
   const supabase = createClient();
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("ALL");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isExerciseModalOpen, setIsExerciseModalOpen] = useState(false);
 
-  // Fetch Data
-  const fetchTemplates = async () => {
+  const fetchTemplates = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase
       .from("workout_templates")
-      .select("*")
+      .select(
+        `
+        *,
+        template_exercises (
+          id, day_number, target_sets, target_reps,
+          exercise_library ( name, target_muscle, has_ai_model )
+        )
+      `,
+      )
       .order("created_at", { ascending: false });
+
     if (data) setTemplates(data);
     setLoading(false);
-  };
+  }, [supabase]);
 
   useEffect(() => {
     fetchTemplates();
-  }, []);
+  }, [fetchTemplates]);
 
-  // Filter Logic
-  const filteredTemplates =
-    filter === "ALL" ? templates : templates.filter((t) => t.ai_tag === filter);
+  const filtered = templates.filter((t) => {
+    const matchesFilter = filter === "ALL" || t.ai_tag === filter;
+    const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
 
   return (
-    // 1. ROOT CONTAINER
-    <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto px-5 pb-24 md:px-8">
-      {/* SECTION 1: HEADER (Title Only) */}
+    <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto px-5 pb-24 md:px-8 overflow-x-hidden">
+      {/* SECTION 1: CLEAN HEADER */}
       <div className="mt-2">
-        <h1 className="text-2xl font-bold text-white truncate">Library</h1>
-        <p className="text-xs text-muted truncate">
-          Manage AI Workouts & Exercises
+        <h1 className="text-2xl font-bold text-white">Template Library</h1>
+        <p className="text-xs text-muted font-medium">
+          Master Blueprints for AI Generation
         </p>
       </div>
 
-      {/* SECTION 2: DIVIDER LINE */}
       <div className="h-px w-full bg-white/10" />
 
-      {/* SECTION 3: ACTION BUTTONS (Flex Row) */}
-      <div className="flex gap-3 w-full">
-        {/* Database Button (Flex-1 makes it stretch on mobile if needed) */}
-        <Button
-          onClick={() => setIsExerciseModalOpen(true)}
-          variant="ghost"
-          className="flex-1 md:flex-none h-10 text-xs px-4 font-bold text-muted hover:text-white border border-white/10 bg-white/5"
-        >
-          Exercises
-        </Button>
-
-        {/* New Template Button */}
-        <Button
-          onClick={() => setIsCreateModalOpen(true)}
-          variant="secondary"
-          className="flex-1 md:flex-none h-10 text-xs px-4 font-bold bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
-        >
-          + Template
-        </Button>
+      {/* SECTION 2: SEARCH BAR (Matching Exercises) */}
+      <div className="relative group">
+        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+          <svg
+            className="w-4 h-4 text-white/20"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2.5"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </div>
+        <input
+          type="text"
+          placeholder="Filter blueprints..."
+          className="w-full bg-white/5 border border-white/5 rounded-2xl p-4 pl-12 text-sm text-white placeholder:text-white/20 focus:border-primary/20 outline-none transition-all"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
-      {/* SECTION 4: SCROLLABLE FILTERS (Preserved Mobile Fix) */}
-      <div className="-mx-5 w-[90vw] overflow-x-auto no-scrollbar md:mx-0 md:w-full">
-        <div className="flex gap-2 px-5 w-max md:w-full md:px-0 md:flex-wrap">
-          {[
-            { id: "ALL", label: "All" },
-            { id: "Silver_Mobility", label: "👴 Silver" },
-            { id: "Low_Impact_Burn", label: "🔥 Burn" },
-            { id: "Hypertrophy_Builder", label: "💪 Muscle" },
-            { id: "Athlete_Performance", label: "⚡ Athlete" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setFilter(tab.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${
-                filter === tab.id
-                  ? "bg-primary text-black border-primary shadow-[0_0_10px_rgba(45,212,191,0.3)]"
-                  : "bg-white/5 text-muted border-white/5 hover:bg-white/10"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+      {/* SECTION 3: SCROLLABLE ACTION ROW (Button + Filters) */}
+      <div className="-mx-5 overflow-x-auto no-scrollbar md:mx-0">
+        <div className="flex items-center gap-3 px-5 md:px-0 min-w-max md:min-w-0">
+          {/* Main Action Button */}
+          <Button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="h-10 text-xs px-6 font-bold bg-primary text-black hover:bg-primary/90 rounded-xl shrink-0 shadow-[0_0_15px_rgba(208,255,0,0.1)]"
+          >
+            + Template
+          </Button>
+
+          <div className="h-6 w-px bg-white/10 shrink-0" />
+
+          {/* Filter Group - Contained and Scrollable */}
+          <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 overflow-x-auto no-scrollbar max-w-[200px] sm:max-w-xs md:max-w-none">
+            <div className="flex flex-nowrap shrink-0">
+              {[
+                { id: "ALL", label: "All" },
+                { id: "Silver_Mobility", label: "👴 Silver" },
+                { id: "Low_Impact_Burn", label: "🔥 Burn" },
+                { id: "Hypertrophy_Builder", label: "💪 Muscle" },
+                { id: "Athlete_Performance", label: "⚡ Athlete" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setFilter(tab.id);
+                    setExpandedId(null);
+                  }}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest whitespace-nowrap transition-all ${
+                    filter === tab.id
+                      ? "bg-white/10 text-white shadow-sm"
+                      : "text-white/30 hover:text-white/60"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* SECTION 5: CONTENT GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {loading ? (
-          [1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-32 bg-white/5 rounded-2xl animate-pulse"
-            />
-          ))
-        ) : filteredTemplates.length === 0 ? (
-          <div className="col-span-full py-12 text-center border border-dashed border-white/10 rounded-2xl bg-white/5">
-            <p className="text-muted text-sm mb-3">No templates found.</p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={() => setIsCreateModalOpen(true)}
-            >
-              Create First
-            </Button>
-          </div>
-        ) : (
-          filteredTemplates.map((t) => (
-            <Card
-              key={t.id}
-              className="w-full relative overflow-hidden cursor-pointer group hover:border-primary/50 transition-all active:scale-[0.98] bg-gradient-to-br from-surface to-[#161b1d] border-white/5 p-4 rounded-2xl shadow-sm"
-            >
-              <div className="flex flex-col h-full justify-between gap-3">
-                <div className="flex justify-between items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[10px] uppercase tracking-wider text-muted font-bold block mb-1 truncate">
-                      {t.ai_tag ? t.ai_tag.split("_")[0] : "General"}
-                    </span>
-                    <h3 className="text-lg font-bold text-white truncate leading-tight">
-                      {t.name}
-                    </h3>
+      {/* SECTION 4: GRID LIST */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+        {loading
+          ? Array(6)
+              .fill(0)
+              .map((_, i) => (
+                <div
+                  key={i}
+                  className="h-24 bg-white/5 rounded-2xl animate-pulse"
+                />
+              ))
+          : filtered.map((t) => {
+              const isExpanded = expandedId === t.id;
+              return (
+                <Card
+                  key={t.id}
+                  onClick={() =>
+                    window.innerWidth < 768 &&
+                    setExpandedId(isExpanded ? null : t.id)
+                  }
+                  className={`group relative bg-[#0c0c0c] border-white/5 hover:border-primary/40 p-4 rounded-2xl transition-all cursor-pointer overflow-hidden flex flex-col ${
+                    isExpanded ? "min-h-[200px]" : "h-24"
+                  } md:h-24`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-primary/5 group-hover:border-primary/30 transition-all duration-300">
+                      <svg
+                        className="w-5 h-5 text-primary"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.5"
+                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                        />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start">
+                        <h3 className="text-[13px] font-bold text-white group-hover:text-primary transition-colors truncate pr-2 uppercase tracking-tight">
+                          {t.name}
+                        </h3>
+                        <svg
+                          className={`w-3 h-3 text-white/20 transition-transform md:hidden ${isExpanded ? "rotate-180" : ""}`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="3"
+                            d="M19 9l-7 7-7-7"
+                          />
+                        </svg>
+                      </div>
+                      <p className="text-[10px] text-white/30 font-bold uppercase tracking-[0.2em] mt-1 truncate">
+                        {t.ai_tag?.split("_")[0]} • {t.intensity}
+                      </p>
+                    </div>
                   </div>
-                  <span
-                    className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-lg border ${
-                      t.intensity === "High"
-                        ? "bg-red-500/10 text-red-400 border-red-500/20"
-                        : t.intensity === "Low"
-                        ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                        : "bg-white/10 text-muted border-white/10"
-                    }`}
-                  >
-                    {t.intensity}
-                  </span>
-                </div>
 
-                <div className="flex items-center gap-3 text-xs text-muted/80 pt-3 border-t border-white/5">
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span>🏋️</span> {t.exercises?.length || 0} Ex
-                  </div>
-                  <div className="flex items-center gap-1.5 ml-auto text-primary/80 shrink-0">
-                    <span>
-                      {t.ai_tag?.includes("Silver")
-                        ? "👴"
-                        : t.ai_tag?.includes("Athlete")
-                        ? "⚡"
-                        : "💪"}
-                    </span>
-                    <span className="text-[10px] font-bold">AI Plan</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))
-        )}
+                  {isExpanded && (
+                    <div className="mt-4 pt-4 border-t border-white/5 space-y-2 md:hidden animate-in fade-in slide-in-from-top-2">
+                      {t.template_exercises?.map((te: any) => (
+                        <div
+                          key={te.id}
+                          className="flex justify-between items-center text-[10px] uppercase font-bold"
+                        >
+                          <span className="truncate pr-4 text-white/60">
+                            {te.exercise_library?.name}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {te.exercise_library?.has_ai_model && (
+                              <div className="w-1 h-1 rounded-full bg-primary animate-pulse" />
+                            )}
+                            <span className="text-primary">
+                              {te.target_sets}×{te.target_reps}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
       </div>
 
-      {/* MODALS */}
       <CreateTemplateModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={fetchTemplates}
-      />
-
-      <ExerciseManagerModal
-        isOpen={isExerciseModalOpen}
-        onClose={() => setIsExerciseModalOpen(false)}
       />
     </div>
   );
