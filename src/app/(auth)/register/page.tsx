@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../../../lib/supabase/client";
-import { Button } from "../../../components/ui/Button";
-import { Card } from "../../../components/ui/Card";
+import { Button } from "../../../components/shared/Button";
+import { Card } from "../../../components/shared/Card";
 import { useUserStore } from "../../../lib/store/userStore";
 
 export default function RegisterPage() {

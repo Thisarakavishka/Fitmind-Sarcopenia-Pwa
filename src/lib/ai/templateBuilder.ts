@@ -1,20 +1,17 @@
-// lib/ai/templateBuilder.ts
 import { createClient } from "../supabase/client";
 
 export async function generateScheduleInDB(userId: string, aiPlanTag: string) {
   const supabase = createClient();
 
-  // 1. GET THE MASTER TEMPLATE based on the AI Tag
+  // 1. GET THE MASTER BLUEPRINT
   const { data: template, error: tError } = await supabase
     .from("workout_templates")
-    .select(
-      `
+    .select(`
       id, name, 
       template_exercises (
         exercise_id, day_number, target_sets, target_reps, order_index
       )
-    `,
-    )
+    `)
     .eq("ai_tag", aiPlanTag)
     .single();
 
@@ -37,26 +34,37 @@ export async function generateScheduleInDB(userId: string, aiPlanTag: string) {
 
   if (pError) return null;
 
-  // 3. GENERATE SESSIONS (Groups of exercises by Day)
-  // We group the template exercises by their day_number
-  const days = Array.from(
-    new Set(template.template_exercises.map((te) => te.day_number)),
-  );
+  // 🌟 3. GENERATE 28 DAYS OF REAL DATED SESSIONS
+  const templateDays = Array.from(new Set(template.template_exercises.map((te) => te.day_number)));
+  const totalDays = 28; // Full Month Roadmap
+  const startDate = new Date();
+  startDate.setHours(0, 0, 0, 0);
 
-  for (const dayNum of days) {
+  for (let i = 0; i < totalDays; i++) {
+    const currentDate = new Date(startDate);
+    currentDate.setDate(startDate.getDate() + i);
+
+    // Protocol Logic: 2 Days Training, 1 Day Rest
+    const isRestDay = i % 3 === 2;
+    if (isRestDay) continue; // We don't create a row for rest, or you can create one with focus_area: "Rest"
+
+    // Map the loop index to the template sequence (e.g., 0->Day1, 1->Day2, 3->Day1)
+    const dayNum = templateDays[i % templateDays.length];
+
     const { data: session, error: sError } = await supabase
       .from("workout_sessions")
       .insert({
         plan_id: plan.id,
         day_of_week: `Day ${dayNum}`,
-        focus_area: template.name, // Or a more specific focus if you add it to templates
+        focus_area: template.name,
+        scheduled_date: currentDate.toISOString().split('T')[0], // 🌟 THE FIX: Hard-coding the real date
         is_completed: false,
       })
       .select()
       .single();
 
     if (session && !sError) {
-      // 4. CLONE THE EXERCISES FOR THIS SPECIFIC SESSION
+      // 4. CLONE EXERCISES FOR THIS SPECIFIC DATE
       const exercisesForThisDay = template.template_exercises
         .filter((te) => te.day_number === dayNum)
         .map((te) => ({

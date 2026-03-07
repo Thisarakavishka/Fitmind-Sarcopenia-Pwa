@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Icons } from "../ui/Icon";
+import { Icons } from "../shared/Icon";
 
 const navItems = [
   { name: "Home", href: "/home", icon: Icons.Home },
