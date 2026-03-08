@@ -117,7 +117,7 @@ export default function ProfilePage() {
             <h1 className="text-xl font-bold tracking-tight">
               {profile.full_name}
             </h1>
-            <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest">
+            <p className="text-[10px] text-white/40 font-medium  tracking-widest">
               {profile.email}
             </p>
           </div>
@@ -258,17 +258,17 @@ export default function ProfilePage() {
               href="/template"
               className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-[9px] font-bold text-center text-white uppercase tracking-widest"
             >
-              Templates
+              Templates Library
             </Link>
             <Link
               href="/exercises"
               className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-[9px] font-bold text-center text-white uppercase tracking-widest"
             >
-              Exercises
+              Exercises Library
             </Link>
             <Link
               href="/foods"
-              className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-[9px] font-bold text-center text-primary uppercase tracking-widest hover:bg-primary/10 transition-colors"
+              className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-[9px] font-bold text-center text-white uppercase tracking-widest hover:bg-primary/10 transition-colors"
             >
               Food Library
             </Link>

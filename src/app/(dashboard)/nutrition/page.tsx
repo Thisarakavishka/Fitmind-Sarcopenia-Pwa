@@ -112,8 +112,8 @@ export default function NutritionPage() {
 
   if (!data)
     return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center text-primary font-black text-xs tracking-widest uppercase animate-pulse">
-        Analyzing_Metabolism...
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
 
@@ -199,8 +199,8 @@ export default function NutritionPage() {
               Nutrition <span className="text-primary">Library</span>
             </h1>
             {/* Truncate the subtitle so it fades out with "..." if the screen is super small instead of breaking */}
-            <p className="text-[9px] md:text-[10px] text-white/40 font-bold uppercase tracking-[0.2em] mt-1 truncate">
-              Geriatric Nutrition System
+            <p className="text-[10px] md:text-[10px] text-white/40 font-bold uppercase tracking-[0.2em] mt-1 truncate">
+              Nutrion & Foods
             </p>
           </div>
 
@@ -354,7 +354,7 @@ export default function NutritionPage() {
                 disabled={isLoadingFoods}
                 className="w-full h-12 bg-transparent border border-white/10 text-white/50 font-black uppercase tracking-widest text-[10px] rounded-xl hover:bg-white/5 hover:text-white transition-all"
               >
-                {isLoadingFoods ? "Loading..." : "Load More Options"}
+                {isLoadingFoods ? "Loading..." : "Load More"}
               </Button>
             )}
             {!hasMore && foodLibrary.length > 0 && (

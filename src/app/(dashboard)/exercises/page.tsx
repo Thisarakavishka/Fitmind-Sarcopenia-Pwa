@@ -87,9 +87,11 @@ export default function ExercisesPage() {
     <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto px-5 pb-24 md:px-8">
       {/* HEADER */}
       <div className="mt-2">
-        <h1 className="text-2xl font-bold text-white">Exercises Management</h1>
-        <p className="text-xs text-muted">
-          Biomechanics & Skeleton Mapping Database
+        <h1 className="text-xl font-bold tracking-tight">
+          Exercises <span className="text-primary">Library</span>
+        </h1>
+        <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest">
+          Exercises Management for ai workouts
         </p>
       </div>
 
