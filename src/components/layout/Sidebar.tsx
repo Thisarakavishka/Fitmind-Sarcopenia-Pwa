@@ -107,7 +107,13 @@ export function Sidebar() {
               href="/exercises"
               active={pathname === "/exercises"}
               icon={<Icons.List size={18} />}
-              label="Exercises"
+              label="Exercises Library"
+            />
+            <NavItem
+              href="/foods"
+              active={pathname === "/foods"}
+              icon={<Icons.SquareActivity size={18} />}
+              label="Food Library"
             />
           </div>
         )}
