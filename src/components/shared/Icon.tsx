@@ -8,6 +8,7 @@ import {
   List,
   Utensils,
   Trash,
+  SquareActivity
 } from "lucide-react";
 
 export const Icons = {
@@ -16,6 +17,7 @@ export const Icons = {
   Library,
   List,
   Home,
+  SquareActivity,
   Schedule: Calendar,
   Workout: Dumbbell,
   Nutrition: Utensils,
