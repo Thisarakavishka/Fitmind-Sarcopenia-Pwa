@@ -17,9 +17,8 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   
-  // REAL DATA STATES
   const [heatmapData, setHeatmapData] = useState<boolean[]>(new Array(84).fill(false));
-  const [hasDoneWorkoutToday, setHasDoneWorkoutToday] = useState(false);
+  const [isCurrentSessionFinished, setIsCurrentSessionFinished] = useState(false);
 
   useEffect(() => {
     async function fetchDashboardData() {
@@ -39,38 +38,35 @@ export default function HomePage() {
           .select(`*, session_exercises (target_sets, target_reps, exercise_library (name, has_ai_model))`)
           .eq("plan_id", planData.id).order("day_of_week", { ascending: true });
 
-        if (sessionData) setSessions(sessionData);
+        if (sessionData) {
+          setSessions(sessionData);
+          
+          // 🌟 FIX: Check if the NEXT incomplete session is marked finished in the DB
+          // We only lock if the user has clicked "FINISH WORKOUT" in the workout page.
+          const next = sessionData.find(s => !s.is_completed) || sessionData[0];
+          
+          // If all sessions in the plan are done, or if the logic finds no incomplete ones
+          const allDone = sessionData.every(s => s.is_completed);
+          setIsCurrentSessionFinished(allDone);
+        }
 
-        // 3. Fetch History & Check Today's Status
+        // 3. Fetch History for Heatmap
         const { data: logs } = await supabase.from("workout_history_logs")
           .select("date_completed").eq("user_id", user.id);
 
         if (logs) {
           const newHeatmap = new Array(84).fill(false);
           const today = new Date();
-          today.setHours(0, 0, 0, 0); // Reset for clean date comparison
-
-          let doneToday = false;
+          today.setHours(0, 0, 0, 0);
 
           logs.forEach(log => {
             const logDate = new Date(log.date_completed);
-            
-            // Check if any log matches Today's date
-            const comparisonDate = new Date(logDate);
-            comparisonDate.setHours(0, 0, 0, 0);
-            if (comparisonDate.getTime() === today.getTime()) {
-              doneToday = true;
-            }
-
-            // Populate Matrix
             const diffDays = Math.floor((new Date().getTime() - logDate.getTime()) / (1000 * 3600 * 24));
             if (diffDays >= 0 && diffDays < 84) {
               newHeatmap[83 - diffDays] = true; 
             }
           });
-
           setHeatmapData(newHeatmap);
-          setHasDoneWorkoutToday(doneToday);
         }
       } catch (error) {
         console.error("Dashboard Sync Error:", error);
@@ -81,11 +77,11 @@ export default function HomePage() {
     fetchDashboardData();
   }, [supabase]);
 
-  // Logic: Find the first incomplete session
+  // Find the first incomplete session
   const nextSession = sessions.find(s => !s.is_completed) || sessions[0];
   
-  // Logic: Is the button globally locked?
-  const isButtonLocked = hasDoneWorkoutToday || (nextSession?.is_completed);
+  // 🌟 FIX: The button is ONLY locked if the session is fully completed (is_completed: true)
+  const isButtonLocked = isCurrentSessionFinished;
 
   return (
     <div className="w-full min-h-screen bg-transparent pb-28 pt-4 px-4 md:px-10 font-sans antialiased">
@@ -98,7 +94,7 @@ export default function HomePage() {
               Welcome, <span className="text-primary">{name?.split(" ")[0] || "User"}</span>
             </h1>
             <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest mt-1">
-              {hasDoneWorkoutToday ? 'Status: Recovery Phase Active' : 'Status: System Ready'}
+              {isButtonLocked ? 'Status: Recovery Phase Active' : 'Status: System Ready'}
             </p>
           </div>
           <button 
@@ -150,7 +146,6 @@ export default function HomePage() {
                   <h2 className="text-xl font-bold text-white tracking-tight">{activePlan.name}</h2>
                 </div>
                 
-                {/* 🌟 ENHANCED BUTTON LOCK: Real-world constraint */}
                 <Button
                   disabled={isButtonLocked}
                   onClick={() => router.push(`/workout?sessionId=${nextSession?.id}`)}
@@ -160,7 +155,7 @@ export default function HomePage() {
                       : "bg-primary text-black hover:opacity-90 shadow-[0_0_20px_rgba(208,255,0,0.1)]"
                   }`}
                 >
-                  {hasDoneWorkoutToday ? "Rest for next session" : nextSession?.is_completed ? "Program Completed" : "Launch Session"}
+                  {isButtonLocked ? "Rest for next session" : "Launch Session"}
                 </Button>
               </Card>
 
