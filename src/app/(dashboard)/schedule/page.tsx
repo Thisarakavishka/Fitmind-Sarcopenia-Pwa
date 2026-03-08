@@ -60,18 +60,28 @@ function ScheduleContent() {
   return (
     <div className="w-full min-h-screen bg-transparent pb-28 pt-4 px-4 md:px-10 font-sans antialiased">
       <div className="max-w-5xl mx-auto space-y-6">
-        <header className="flex justify-between items-center py-2">
-          <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">
+        {/* 🌟 REFACTORED HEADER: Added the Custom Plan Button */}
+        <header className="flex justify-between items-center py-2 gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-white tracking-tight whitespace-nowrap">
               Monthly <span className="text-primary">Roadmap</span>
             </h1>
-            <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest mt-1">
-              Active WorkoutPlan: {activePlan?.name || "Initializing..."}
+            <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest mt-1 truncate">
+              {activePlan?.name || "Initializing..."}
             </p>
           </div>
         </header>
 
         <hr className="border-white/5" />
+
+        <div className="flex justify-end">
+          <button
+            onClick={() => router.push("/create-plan")}
+            className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[9px] font-black text-white uppercase tracking-widest transition-colors shrink-0"
+          >
+            + Custom Plan
+          </button>
+        </div>
 
         {/* TIMELINE SECTION */}
         <div className="space-y-12 pt-4">
