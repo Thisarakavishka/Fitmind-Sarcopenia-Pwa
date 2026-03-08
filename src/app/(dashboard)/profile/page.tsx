@@ -114,8 +114,8 @@ export default function ProfilePage() {
             {profile.email?.charAt(0).toUpperCase()}
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight uppercase italic">
-              User <span className="text-primary">Profile</span>
+            <h1 className="text-xl font-bold tracking-tight">
+              {profile.full_name}
             </h1>
             <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest">
               {profile.email}
@@ -256,15 +256,21 @@ export default function ProfilePage() {
           <div className="pt-6 border-t border-white/5 grid grid-cols-2 gap-3">
             <Link
               href="/template"
-              className="p-4 rounded-xl border border-white/5 bg-[#0a0a0a] text-[9px] font-bold text-center text-white uppercase tracking-widest"
+              className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-[9px] font-bold text-center text-white uppercase tracking-widest"
             >
               Templates
             </Link>
             <Link
               href="/exercises"
-              className="p-4 rounded-xl border border-white/5 bg-[#0a0a0a] text-[9px] font-bold text-center text-white uppercase tracking-widest"
+              className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-[9px] font-bold text-center text-white uppercase tracking-widest"
             >
               Exercises
+            </Link>
+            <Link
+              href="/foods"
+              className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-[9px] font-bold text-center text-primary uppercase tracking-widest hover:bg-primary/10 transition-colors"
+            >
+              Food Library
             </Link>
           </div>
         )}
