@@ -7,6 +7,7 @@ import { Card } from "../../../components/shared/Card";
 import { Button } from "../../../components/shared/Button";
 import { createCustomPlan } from "../../../lib/ai/customPlan";
 import { Icons } from "@/src/components/shared/Icon";
+import toast from "react-hot-toast";
 
 export default function CreateCustomPlanPage() {
   const supabase = createClient();
@@ -30,7 +31,7 @@ export default function CreateCustomPlanPage() {
       if (data) setExerciseLibrary(data);
     }
     fetchExercises();
-  }, []);
+  }, [supabase]);
 
   const handleAddDay = () => {
     setDays([...days, { focus_area: "New Workout Day", exercises: [] }]);
@@ -80,19 +81,19 @@ export default function CreateCustomPlanPage() {
   const handleSavePlan = async () => {
     // 1. Check if name exists
     if (!planName.trim()) {
-      return alert("Please give your plan a name.");
+      return toast.error("Please give your plan a name.");
     }
 
     // 2. Check if at least one day exists
     if (days.length === 0) {
-      return alert("Your plan must have at least one training day.");
+      return toast.error("Your plan must have at least one training day.");
     }
 
     // 3. Check if any day has ZERO exercises
     const emptyDayIndex = days.findIndex((day) => day.exercises.length === 0);
     if (emptyDayIndex !== -1) {
-      return alert(
-        `Day 0${emptyDayIndex + 1} (${days[emptyDayIndex].focus_area}) has no exercises. Please add exercises or remove the day.`,
+      return toast.error(
+        `Day 0${emptyDayIndex + 1} (${days[emptyDayIndex].focus_area}) has no exercises.`,
       );
     }
 
@@ -101,12 +102,15 @@ export default function CreateCustomPlanPage() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) throw new Error("No user found");
 
       await createCustomPlan(user.id, planName, days);
+
+      toast.success("Custom plan activated!");
       router.push("/home"); // Send them back to dashboard to see their new active plan
     } catch (e) {
-      alert("Failed to save custom plan.");
+      console.error(e);
+      toast.error("Failed to save custom plan.");
     } finally {
       setIsSaving(false);
     }
@@ -117,7 +121,7 @@ export default function CreateCustomPlanPage() {
       <header className="flex items-center gap-4 border-b border-white/5 pb-4">
         <button
           onClick={() => router.back()}
-          className="text-white/40 hover:text-white"
+          className="text-white/40 hover:text-white transition-colors"
         >
           ←
         </button>
@@ -141,7 +145,7 @@ export default function CreateCustomPlanPage() {
           placeholder="e.g. My Summer Shred"
           value={planName}
           onChange={(e) => setPlanName(e.target.value)}
-          className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-primary/50"
+          className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-primary/50 transition-colors"
         />
       </div>
 
@@ -168,7 +172,7 @@ export default function CreateCustomPlanPage() {
                   newDays[dayIndex].focus_area = e.target.value;
                   setDays(newDays);
                 }}
-                className="bg-transparent text-sm font-black uppercase text-primary outline-none border-b border-white/10 focus:border-primary w-2/3 pb-1"
+                className="bg-transparent text-sm font-black uppercase text-primary outline-none border-b border-white/10 focus:border-primary w-2/3 pb-1 transition-colors"
               />
               <span className="text-[9px] font-black text-white/20 uppercase tracking-widest">
                 Day 0{dayIndex + 1}
@@ -217,7 +221,7 @@ export default function CreateCustomPlanPage() {
                           Number(e.target.value),
                         )
                       }
-                      className="w-10 bg-black/40 border border-white/10 rounded p-1 text-center text-xs font-bold"
+                      className="w-10 bg-black/40 border border-white/10 rounded p-1 text-center text-xs font-bold outline-none focus:border-primary/50 transition-colors"
                     />
                     <span className="text-[8px] text-white/40">×</span>
                     <input
@@ -231,7 +235,7 @@ export default function CreateCustomPlanPage() {
                           Number(e.target.value),
                         )
                       }
-                      className="w-10 bg-black/40 border border-white/10 rounded p-1 text-center text-xs font-bold"
+                      className="w-10 bg-black/40 border border-white/10 rounded p-1 text-center text-xs font-bold outline-none focus:border-primary/50 transition-colors"
                     />
                   </div>
                   <button
@@ -257,14 +261,14 @@ export default function CreateCustomPlanPage() {
       <div className="flex gap-3 pt-6">
         <button
           onClick={handleAddDay}
-          className="flex-1 py-4 bg-white/5 text-white/60 font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-white/10"
+          className="flex-1 py-4 bg-white/5 text-white/60 font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-white/10 transition-colors"
         >
           + Add Training Day
         </button>
         <Button
           onClick={handleSavePlan}
           disabled={isSaving}
-          className="flex-1 py-4 bg-primary text-black font-black uppercase text-[10px] tracking-widest rounded-xl shadow-[0_0_20px_rgba(208,255,0,0.15)]"
+          className="flex-1 py-4 bg-primary text-black font-black uppercase text-[10px] tracking-widest rounded-xl shadow-[0_0_20px_rgba(208,255,0,0.15)] hover:scale-[1.02] transition-transform"
         >
           {isSaving ? "Saving..." : "Activate Plan"}
         </Button>
