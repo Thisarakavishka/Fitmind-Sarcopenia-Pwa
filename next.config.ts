@@ -10,6 +10,7 @@ const withPWA = withPWAInit({
 
 // Define your Next.js config
 const nextConfig: NextConfig = {
+  devIndicators: false,
   // Add any other Next.js config here if needed
 };
 

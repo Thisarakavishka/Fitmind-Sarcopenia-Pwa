@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "../../../lib/supabase/client";
 import { Button } from "../../../components/shared/Button";
 import { Card } from "../../../components/shared/Card";
+import toast from "react-hot-toast";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -27,8 +28,10 @@ export default function LoginPage() {
 
     if (error) {
       setError(error.message);
+      toast.error("Login fails: " + error.message);
       setLoading(false);
     } else {
+      toast.success("Successfully login");
       router.refresh();
       router.push("/home");
     }
@@ -42,12 +45,11 @@ export default function LoginPage() {
         queryParams: { access_type: "offline", prompt: "consent" },
       },
     });
-    if (error) alert("Could not connect to Google.");
+    if (error) toast.error("Could not connect to Google.");
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      {/* COMPACT CARD: max-w-sm */}
       <Card className="w-full max-w-sm p-6 border-white/10 bg-surface shadow-2xl">
         {/* Header */}
         <div className="text-center mb-6">
@@ -63,7 +65,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* --- GOOGLE LOGIN (Compact) --- */}
+        {/* --- GOOGLE LOGIN --- */}
         <div className="mb-5">
           <button
             type="button"

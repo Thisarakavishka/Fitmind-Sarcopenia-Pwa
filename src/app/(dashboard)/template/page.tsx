@@ -48,9 +48,11 @@ export default function TemplatePage() {
     <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto px-5 pb-24 md:px-8 overflow-x-hidden">
       {/* SECTION 1: CLEAN HEADER */}
       <div className="mt-2">
-        <h1 className="text-2xl font-bold text-white">Template Library</h1>
-        <p className="text-xs text-muted font-medium">
-          Master Blueprints for AI Generation
+        <h1 className="text-xl font-bold tracking-tight">
+          Template <span className="text-primary">Library</span>
+        </h1>
+        <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest">
+          Workout Templates Management for AI Schedules
         </p>
       </div>
 
