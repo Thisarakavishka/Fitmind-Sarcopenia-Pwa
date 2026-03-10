@@ -7,6 +7,7 @@ import { createClient } from "../../../lib/supabase/client";
 import { Button } from "../../../components/shared/Button";
 import { Card } from "../../../components/shared/Card";
 import { useUserStore } from "../../../lib/store/userStore";
+import toast from "react-hot-toast";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -29,7 +30,7 @@ export default function RegisterPage() {
         queryParams: { access_type: "offline", prompt: "consent" },
       },
     });
-    if (error) alert("Google Signup Failed");
+    if (error) toast.error("Google Signup Failed");
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -45,9 +46,12 @@ export default function RegisterPage() {
 
     if (error) {
       setError(error.message);
+      toast.error("Registration failed: " + error.message);
       setLoading(false);
       return;
     }
+
+    toast.success("Account created successfully");
 
     setUserData({ name: formData.name, email: formData.email });
     router.push("/onboarding");
@@ -55,7 +59,6 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      {/* COMPACT CARD: max-w-sm */}
       <Card className="w-full max-w-sm p-6 border-white/10 bg-surface shadow-2xl">
         {/* Header */}
         <div className="text-center mb-6">
@@ -71,7 +74,7 @@ export default function RegisterPage() {
           </div>
         )}
 
-        {/* --- GOOGLE SIGNUP (Compact) --- */}
+        {/* --- GOOGLE SIGNUP --- */}
         <div className="mb-5">
           <button
             type="button"

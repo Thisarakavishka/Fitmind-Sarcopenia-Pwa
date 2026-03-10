@@ -117,7 +117,7 @@ export default function ProfilePage() {
             <h1 className="text-xl font-bold tracking-tight">
               {profile.full_name}
             </h1>
-            <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest">
+            <p className="text-[10px] text-white/40 font-medium  tracking-widest">
               {profile.email}
             </p>
           </div>
@@ -232,6 +232,23 @@ export default function ProfilePage() {
         {/* LOGS */}
         <div className="space-y-3 pt-4">
           <p className="text-[9px] font-black text-white/10 uppercase tracking-[0.4em]">
+            Workout Plans
+          </p>
+          <Link href="/programs">
+            <Card className="p-5 bg-white/5 border-white/5 flex justify-between items-center hover:bg-white/10 transition-all">
+              <div className="flex flex-col">
+                <span className="text-[11px] font-bold text-white uppercase">
+                  My Programs
+                </span>
+                <span className="text-[9px] text-white/30 uppercase">
+                  Manage Active & Past Workouts
+                </span>
+              </div>
+              <span className="text-primary font-bold">→</span>
+            </Card>
+          </Link>
+
+          <p className="mt-5 text-[9px] font-black text-white/10 uppercase tracking-[0.4em]">
             Historical Data
           </p>
           <Link href="/history">
@@ -242,7 +259,7 @@ export default function ProfilePage() {
                     Activity Logs
                   </span>
                   <span className="text-[9px] text-white/30 uppercase">
-                    Track Accuracy Trends
+                    Track Accuracy & Exercises Trends
                   </span>
                 </div>
               </div>
@@ -258,17 +275,17 @@ export default function ProfilePage() {
               href="/template"
               className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-[9px] font-bold text-center text-white uppercase tracking-widest"
             >
-              Templates
+              Templates Library
             </Link>
             <Link
               href="/exercises"
               className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-[9px] font-bold text-center text-white uppercase tracking-widest"
             >
-              Exercises
+              Exercises Library
             </Link>
             <Link
               href="/foods"
-              className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-[9px] font-bold text-center text-primary uppercase tracking-widest hover:bg-primary/10 transition-colors"
+              className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-[9px] font-bold text-center text-white uppercase tracking-widest hover:bg-primary/10 transition-colors"
             >
               Food Library
             </Link>

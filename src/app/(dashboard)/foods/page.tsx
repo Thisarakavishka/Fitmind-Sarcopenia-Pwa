@@ -103,16 +103,23 @@ export default function AdminFoodsPage() {
 
   return (
     <div className="w-full min-h-screen bg-transparent pb-32 pt-10 px-6 max-w-2xl mx-auto space-y-6 font-sans antialiased text-white">
-      <header className="flex justify-between items-center border-b border-white/5 pb-4">
+      
+      {/* 🌟 REFACTORED HEADER */}
+      <header className="border-b border-white/5 pb-4">
         <button
           onClick={() => router.back()}
-          className="text-white/40 hover:text-white transition-colors"
+          className="w-8 h-8 bg-white/5 rounded-full flex items-center justify-center text-white/40 hover:text-white transition-colors mb-4"
         >
-          ← Back
+          ←
         </button>
-        <h1 className="text-xl font-black uppercase italic">
-          Food <span className="text-primary">Library</span>
-        </h1>
+        <div className="mt-2">
+          <h1 className="text-xl font-bold tracking-tight">
+            Food <span className="text-primary">Management</span>
+          </h1>
+          <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest">
+            Food Library for AI Nutrition
+          </p>
+        </div>
       </header>
 
       <div className="flex justify-between items-center">
@@ -223,7 +230,6 @@ export default function AdminFoodsPage() {
                 {food.protein_per_100g}g Protein | {food.calories_per_100g} kcal
               </p>
               
-              {/* 🌟 REFACTORED: Pills placed under the stats */}
               {(food.is_leucine_rich || food.is_omega3_rich) && (
                 <div className="flex gap-1.5 mt-2">
                   {food.is_leucine_rich && (

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Toaster } from "react-hot-toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,11 +13,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// 1. Update Metadata for your App
+
 export const metadata: Metadata = {
   title: "FitMind AI Lens",
   description: "AI-Powered Sarcopenia Detection",
-  manifest: "/manifest.json", // <--- Link the manifest here
+  manifest: "/manifest.json", 
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -35,6 +36,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black text-white`}
       >
         {children}
+        <Toaster />
       </body>
     </html>
   );
